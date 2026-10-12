@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import { fileURLToPath } from 'url';
+import { dirname, join, resolve } from 'path';
+import { existsSync } from 'fs';
 
 import { pool } from './db/index.js';
 import { login, auth } from './API/auth.js';
@@ -16,53 +19,56 @@ import reportsRouter     from './routes/reports.js';
 import settingsRouter    from './routes/settings.js';
 import classesListRouter from './routes/classesList.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Try several candidate paths for client/dist — works both locally and on Aletcloud
+const DIST_CANDIDATES = [
+  join(__dirname, '..', '..', 'client', 'dist'),   // server/src → server → repo root → client/dist
+  join(__dirname, '..', '..', '..', 'client', 'dist'), // one level deeper
+  resolve(process.cwd(), '..', 'client', 'dist'),   // cwd=server → ../client/dist
+  resolve(process.cwd(), 'client', 'dist'),          // cwd=repo root → client/dist
+];
+
+const DIST = DIST_CANDIDATES.find(p => existsSync(p));
+console.log('cwd:', process.cwd());
+console.log('__dirname:', __dirname);
+console.log('DIST resolved:', DIST || 'NOT FOUND');
+DIST_CANDIDATES.forEach(p => console.log(' candidate:', p, existsSync(p) ? '✅' : '❌'));
+
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// Authentication
+// ── API routes ────────────────────────────────────────────────────────────
 app.post('/api/login', login);
-
-// Generic CRUD for all entity types
 setupCrud(app);
-
-// Student profile aggregate
-app.use('/api/students', auth, studentsRouter);
-
-// Payments list
-app.use('/api/payments', auth, paymentsRouter);
-
-// Dashboard (stats + overview)
-app.use('/api', auth, statsRouter);
-
-// Attendance
-app.use('/api/attendance', auth, attendanceRouter);
-
-// Exam results / marks
-app.use('/api/results', auth, resultsRouter);
-
-// Timetable
-app.use('/api/timetable', auth, timetableRouter);
-
-// Reports
-app.use('/api/reports', auth, reportsRouter);
-
-// Settings (GET is public, PUT requires auth — handled inside the router)
-app.use('/api/settings', settingsRouter);
-
-// Classes list helper
+app.use('/api/students',     auth, studentsRouter);
+app.use('/api/payments',     auth, paymentsRouter);
+app.use('/api',              auth, statsRouter);
+app.use('/api/attendance',   auth, attendanceRouter);
+app.use('/api/results',      auth, resultsRouter);
+app.use('/api/timetable',    auth, timetableRouter);
+app.use('/api/reports',      auth, reportsRouter);
+app.use('/api/settings',     settingsRouter);
 app.use('/api/classes-list', auth, classesListRouter);
 
-// Global error handler
+// ── Serve React frontend ──────────────────────────────────────────────────
+if (DIST) {
+  app.use(express.static(DIST));
+  app.get('*', (req, res) => res.sendFile(join(DIST, 'index.html')));
+  console.log('📦  Serving frontend from', DIST);
+} else {
+  console.warn('⚠️   client/dist not found — API-only mode. Run npm run build first.');
+}
+
 app.use(errorHandler);
 
 const PORT = Number(process.env.PORT) || 4000;
 
-// Verify DB connection before accepting traffic
 pool.query('SELECT 1')
   .then(() => {
     console.log('✅  Database connected.');
-    app.listen(PORT, '0.0.0.0', () => console.log(`🚀  API on http://localhost:${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
   })
   .catch(err => {
     console.error('❌  Database connection failed:', err.message);
