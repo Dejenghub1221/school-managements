@@ -6,7 +6,17 @@
  * It is safe to re-run: all inserts use ON CONFLICT DO NOTHING.
  */
 
-import { pool, CLS, SUB, feeStatus } from './index.js';
+import 'dotenv/config';
+import pg from 'pg';
+import { CLS, SUB, feeStatus } from './index.js';
+
+// Seed uses a direct single connection — avoids session-pooler transaction issues.
+// Add SEED_DATABASE_URL to .env if you want a separate direct connection string.
+const pool = new pg.Pool({
+  connectionString: process.env.SEED_DATABASE_URL || process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 1
+});
 
 // ─── deterministic pseudo-random (same output every run) ──────────────────
 let sd = 11;

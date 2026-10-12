@@ -2,10 +2,12 @@ import pg from 'pg';
 
 const { Pool } = pg;
 
-// Single connection pool — reused across all requests
+// Single connection pool — reused across all requests.
+// Supabase requires SSL in all environments; rejectUnauthorized:false
+// accepts the self-signed cert that Supabase uses on its pooler.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }
 });
 
 // ─── Helpers shared across routes (mirror the old in-memory API) ────────────
