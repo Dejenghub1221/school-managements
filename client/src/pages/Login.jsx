@@ -40,7 +40,7 @@ export default function Login() {
     <div className="login-page">
       <form className="card login" onSubmit={submit} noValidate>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <img src="/School_icon.png" alt="School logo" style={{ width: 42, height: 42, objectFit: 'contain', flexShrink: 0 }} />
+          <img src="/sl_icon.png" alt="School logo" style={{ width: 42, height: 42, objectFit: 'contain', flexShrink: 0, background: 'none', borderRadius: 0 }} />
           <strong style={{ fontSize: '1.25rem', fontFamily: "'Bricolage Grotesque', sans-serif", color: 'var(--tx)' }}>
             {settings?.school || 'ABC Academy'}
           </strong>
