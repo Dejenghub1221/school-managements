@@ -4,6 +4,13 @@ import { api } from '../api/index.js';
 const Ctx = createContext();
 export const useAuth = () => useContext(Ctx);
 
+// Client-side fallback permissions (mirrors server API/auth.js PM)
+const PM_CLIENT = {
+  teacher: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', timetable: 'r', library: 'r', reports: 'r' },
+  student: { dashboard: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r' },
+  parent:  { dashboard: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r' },
+};
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(() => JSON.parse(localStorage.getItem('session') || 'null'));
 
@@ -24,7 +31,12 @@ export function AuthProvider({ children }) {
     setSession(null);
   };
 
-  const see = k => !!session?.permissions?.[k];
+  const see = k => {
+    // Use token permissions first; fall back to role-based check for missing keys
+    if (session?.permissions?.[k]) return true;
+    const role = session?.user?.role;
+    return role === 'admin' || !!(PM_CLIENT[role]?.[k]);
+  };
   const can = k => session?.permissions?.[k] === 'w';
 
   return (

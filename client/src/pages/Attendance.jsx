@@ -111,7 +111,10 @@ export default function Attendance() {
             </table>
           </div>
         ) : (
-          <div className="card empty"><h3>No attendance recorded yet</h3></div>
+          <div className="card" style={{ padding: 24, textAlign: 'center' }}>
+            <h3>No attendance recorded yet</h3>
+            <p className="muted" style={{ marginTop: 8 }}>Attendance records will appear here once a teacher marks them.</p>
+          </div>
         )}
       </>
     );
