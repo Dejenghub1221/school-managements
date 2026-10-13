@@ -146,6 +146,10 @@ h3 { font-size: 1rem; }
 .brand.dark {
   color: var(--tx);
   padding: 0 0 16px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
   justify-content: flex-start;
 }
 

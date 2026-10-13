@@ -41,7 +41,7 @@ export default function Login() {
       <form className="card login" onSubmit={submit} noValidate>
         <div className="brand dark">
           <img src="/School_icon.png" alt="School logo" className="brand-logo" />
-          <span>{settings?.school || 'ABC Academy'}</span>
+          <span style={{ overflow: 'visible', whiteSpace: 'normal' }}>{settings?.school || 'ABC Academy'}</span>
         </div>
         <h1>Sign in</h1>
 
