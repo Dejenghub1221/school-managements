@@ -160,6 +160,22 @@ h3 { font-size: 1rem; }
   flex: none;
 }
 
+.brand-logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
+  display: block;
+}
+
+.brand-info a {
+  display: flex;
+  flex: none;
+  border-radius: 8px;
+  outline-offset: 2px;
+}
+
 .brand-info span,
 .brand > span {
   white-space: nowrap;

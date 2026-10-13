@@ -113,7 +113,9 @@ function Layout() {
       >
         <div className="brand">
           <div className="brand-info">
-            <b>{settings?.school?.charAt(0) || 'A'}</b>
+            <a href="/" aria-label="Go to dashboard">
+              <img src="/School_icon.png" alt="School logo" className="brand-logo" />
+            </a>
             <span id="bn">{settings.school}</span>
           </div>
           <button

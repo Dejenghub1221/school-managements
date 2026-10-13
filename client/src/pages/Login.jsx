@@ -40,7 +40,7 @@ export default function Login() {
     <div className="login-page">
       <form className="card login" onSubmit={submit} noValidate>
         <div className="brand dark">
-          <b>{settings?.school?.charAt(0) || 'A'}</b>
+          <img src="/School_icon.png" alt="School logo" className="brand-logo" />
           <span>{settings?.school || 'ABC Academy'}</span>
         </div>
         <h1>Sign in</h1>
