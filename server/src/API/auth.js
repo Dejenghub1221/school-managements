@@ -22,17 +22,28 @@ const USERS = [
   { username: 'parent',  role: 'parent',  name: 'Abebe',         parentId: 'P23' },
 ];
 
+// Bump TOKEN_VERSION to invalidate all existing sessions (forces fresh login)
+const TOKEN_VERSION = 2;
+
 export function login(req, res) {
   const { username, password } = req.body || {};
   const user = USERS.find(u => u.username === username);
   if (!user || !bcrypt.compareSync(String(password || ''), hash))
     return res.status(401).json({ error: 'Wrong username or password.' });
-  res.json({ token: jwt.sign(user, SECRET, { expiresIn: '8h' }), user, permissions: permissions(user.role) });
+  res.json({
+    token: jwt.sign({ ...user, v: TOKEN_VERSION }, SECRET, { expiresIn: '8h' }),
+    user,
+    permissions: permissions(user.role)
+  });
 }
 
 export function auth(req, res, next) {
   try {
-    req.user = jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), SECRET);
+    const decoded = jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), SECRET);
+    if (decoded.v !== TOKEN_VERSION) {
+      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
+    }
+    req.user = decoded;
     next();
   } catch {
     res.status(401).json({ error: 'Sign in required.' });
@@ -46,7 +57,6 @@ export const allow = (key, need = 'r') => (req, res, next) => {
 };
 
 // Returns array of student IDs the user may see, or null (= all).
-// Students see themselves; parents see their children via guardian FK.
 export async function ownStudentIds(user) {
   if (user.role === 'student') return [user.studentId];
   if (user.role === 'parent') {
@@ -55,7 +65,7 @@ export async function ownStudentIds(user) {
     );
     return rows.map(r => r.id);
   }
-  return null; // admin / teacher see all
+  return null;
 }
 
 // Returns array of class names the teacher owns, or null (= all).
