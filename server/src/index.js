@@ -30,10 +30,6 @@ const DIST_CANDIDATES = [
 ];
 
 const DIST = DIST_CANDIDATES.find(p => existsSync(p));
-console.log('cwd:', process.cwd());
-console.log('__dirname:', __dirname);
-console.log('DIST resolved:', DIST || 'NOT FOUND');
-DIST_CANDIDATES.forEach(p => console.log(' candidate:', p, existsSync(p) ? '✅' : '❌'));
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
