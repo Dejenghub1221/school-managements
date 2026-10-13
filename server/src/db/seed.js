@@ -25,8 +25,8 @@ const pk  = a  => a[Math.floor(rnd() * a.length)];
 const pad = (n, w) => String(n).padStart(w, '0');
 const ph  = () => '+' + (100 + Math.floor(rnd() * 800)) + ' ' + (100000 + Math.floor(rnd() * 899999));
 
-const FM = ['Daniel','Samuel','Ben','Omar','Liam','Noah','Eli','Marcus','Yusuf','Isaac','Kofi','Adam'];
-const FF = ['Sara','Hana','Mia','Amira','Grace','Lina','Zoe','Nadia','Ruth','Chloe','Tamar','Aisha'];
+const FM = ['Dejenie','Samuel','Ben','Omar','Liam','Noah','Eli','Marcus','Yusuf','Isaac','Kofi','Adam'];
+const FF = ['Dejenie','Hana','Mia','Amira','Grace','Lina','Zoe','Nadia','Ruth','Chloe','Tamar','Aisha'];
 const LN = ['Bekele','Hassan','Carter','Okafor','Lindqvist','Mensah','Rossi','Tanaka','Haile','Novak','Silva','Ibrahim'];
 
 async function run() {

@@ -99,10 +99,10 @@ function Layout() {
     user.role === 'admin'
       ? `${ROLES[user.role]} · full access`
       : user.role === 'teacher'
-      ? `${ROLES[user.role]} · Ms. Alder`
+      ? `${ROLES[user.role]} · Ms. Alemu`
       : user.role === 'student'
-      ? `${ROLES[user.role]} · Sara Bekele`
-      : `${ROLES[user.role]} · Daniel Hassan`;
+      ? `${ROLES[user.role]} · Dejenie Abebe`
+      : `${ROLES[user.role]} · Dejenie Hassan`;
 
   return (
     <>
