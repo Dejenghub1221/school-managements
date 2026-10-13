@@ -17,9 +17,9 @@ const permissions = role => Object.fromEntries(KEYS.map(k => [k, perm(role, k)])
 const hash = bcrypt.hashSync(process.env.DEMO_PASSWORD || 'school123', 8);
 const USERS = [
   { username: 'admin',   role: 'admin',   name: 'Administrator' },
-  { username: 'teacher', role: 'teacher', name: 'Ms. Alder',     teacherId: 'T01' },
-  { username: 'student', role: 'student', name: 'Sara Bekele',   studentId: 'S1001' },
-  { username: 'parent',  role: 'parent',  name: 'Daniel Hassan', parentId: 'P01' },
+  { username: 'teacher', role: 'teacher', name: 'Ms. Alemu',     teacherId: 'T01' },
+  { username: 'student', role: 'student', name: 'Dejenie Abebe', studentId: 'S1034' },
+  { username: 'parent',  role: 'parent',  name: 'Abebe',         parentId: 'P23' },
 ];
 
 export function login(req, res) {
