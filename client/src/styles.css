@@ -228,7 +228,7 @@ h3 { font-size: 1rem; }
   display: block;
 }
 
-#side a, #side button:not(.side-toggle) {
+#side a:not(.brand-link), #side button:not(.side-toggle) {
   all: unset;
   box-sizing: border-box;
   display: flex;
@@ -243,18 +243,18 @@ h3 { font-size: 1rem; }
   text-decoration: none;
 }
 
-#side a:hover, #side button:not(.side-toggle):hover {
+#side a:not(.brand-link):hover, #side button:not(.side-toggle):hover {
   background: rgba(255,255,255,0.08);
 }
 
-#side a.active, #side button:not(.side-toggle)[aria-current=page] {
+#side a:not(.brand-link).active, #side button:not(.side-toggle)[aria-current=page] {
   background: rgba(255,255,255,0.12);
   color: #fff;
   border-left-color: var(--ch);
   font-weight: 600;
 }
 
-#side a:focus-visible, #side button:not(.side-toggle):focus-visible {
+#side a:not(.brand-link):focus-visible, #side button:not(.side-toggle):focus-visible {
   outline: 3px solid var(--ch);
 }
 
