@@ -99,7 +99,6 @@ h3 { font-size: 1rem; }
   flex-direction: column;
   padding: calc(16px + env(safe-area-inset-top, 0px)) 12px calc(16px + env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
-  overflow-x: visible;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
 }
@@ -193,27 +192,22 @@ h3 { font-size: 1rem; }
 #side button.side-toggle {
   all: unset;
   box-sizing: border-box;
-  position: absolute;
-  right: -18px;
-  top: 20px;
   width: 28px;
   height: 28px;
-  border-radius: 0 6px 6px 0;
-  background: var(--sb);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.12);
-  border-left: none;
   color: var(--sbt);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex: none;
-  z-index: 31;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 #side button.side-toggle:hover {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.18);
   color: #fff;
   border-color: rgba(255,255,255,0.25);
 }
