@@ -163,7 +163,7 @@ h3 { font-size: 1rem; }
 .brand-logo {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 4px;
   object-fit: cover;
   flex: none;
   display: block;
@@ -172,7 +172,7 @@ h3 { font-size: 1rem; }
 .brand-info a {
   display: flex;
   flex: none;
-  border-radius: 8px;
+  border-radius: 4px;
   outline-offset: 2px;
 }
 
