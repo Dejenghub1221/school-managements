@@ -1048,13 +1048,13 @@ body.ro [data-a=add], body.ro [data-a=edit], body.ro [data-a=del], body.ro [data
 }
 
 .login-footer {
-  margin-top: 20px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd);
   text-align: center;
-  color: rgba(255,255,255,0.5);
+  color: var(--mu);
   font-size: 12px;
   width: 100%;
-  position: relative;
-  z-index: 1;
 }
 
 @media (max-width: 700px) {

@@ -113,10 +113,10 @@ export default function Login() {
           ))}
         </div>
       </div>
+      <div className="login-footer">
+        © {new Date().getFullYear()} School-Management SC. All rights reserved.
+      </div>
     </form>
-    <footer className="login-footer">
-      © {new Date().getFullYear()} School-Management SC. All rights reserved.
-    </footer>
   </div>
   );
 }
