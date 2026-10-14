@@ -207,8 +207,7 @@ function Layout() {
           </Routes>
         </main>
         <footer className="app-footer">
-          <span>© {new Date().getFullYear()} {settings.school}</span>
-          <span>School Management System</span>
+          <span>© {new Date().getFullYear()} School-Management SC. All rights reserved.</span>
         </footer>
       </div>
     </>
