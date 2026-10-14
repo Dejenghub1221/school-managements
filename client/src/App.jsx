@@ -206,6 +206,10 @@ function Layout() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
+        <footer className="app-footer">
+          <span>© {new Date().getFullYear()} {settings.school}</span>
+          <span>School Management System</span>
+        </footer>
       </div>
     </>
   );
