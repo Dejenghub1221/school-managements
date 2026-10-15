@@ -968,6 +968,7 @@ body.ro [data-a=add], body.ro [data-a=edit], body.ro [data-a=del], body.ro [data
   flex-direction: column;
   gap: 4px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08), 0 2px 10px rgba(0, 0, 0, 0.04);
+  border-top: 4px solid var(--ch);
 }
 
 .pwd-wrap {
