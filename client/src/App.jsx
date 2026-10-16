@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
+import { useLang } from './context/LangContext.jsx';
 import { Icon } from './icons.jsx';
+import { Notifications } from './components/index.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import EntityPage from './pages/EntityPage.jsx';
@@ -14,20 +16,20 @@ import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
 
 const NAV = [
-  ['dashboard', 'Dashboard', '/'],
-  ['students', 'Students', '/students'],
-  ['teachers', 'Teachers', '/teachers'],
-  ['classes', 'Classes', '/classes'],
-  ['subjects', 'Subjects', '/subjects'],
-  ['attendance', 'Attendance', '/attendance'],
-  ['exams', 'Exams & Results', '/exams'],
-  ['assignments', 'Assignments', '/assignments'],
-  ['fees', 'Fees & Payments', '/fees'],
-  ['parents', 'Parents', '/parents'],
-  ['timetable', 'Timetable', '/timetable'],
-  ['library', 'Library', '/library'],
-  ['reports', 'Reports', '/reports'],
-  ['settings', 'Settings', '/settings']
+  ['dashboard', 'dashboard', '/'],
+  ['students', 'students', '/students'],
+  ['teachers', 'teachers', '/teachers'],
+  ['classes', 'classes', '/classes'],
+  ['subjects', 'subjects', '/subjects'],
+  ['attendance', 'attendance', '/attendance'],
+  ['exams', 'exams', '/exams'],
+  ['assignments', 'assignments', '/assignments'],
+  ['fees', 'fees', '/fees'],
+  ['parents', 'parents', '/parents'],
+  ['timetable', 'timetable', '/timetable'],
+  ['library', 'library', '/library'],
+  ['reports', 'reports', '/reports'],
+  ['settings', 'settings', '/settings']
 ];
 
 const ROLES = {
@@ -44,7 +46,8 @@ function Guard({ k, children }) {
 
 function Layout() {
   const { user, logout, switchRole, see, can } = useAuth();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
+  const { t, lang, switchLang } = useLang();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -79,6 +82,25 @@ function Layout() {
   const currentNav = NAV.find(n => (n[2] === '/' ? location.pathname === '/' : location.pathname.startsWith(n[2]))) || NAV[0];
   const activeKey = currentNav[0];
   const isReadOnly = activeKey !== 'dashboard' && !can(activeKey);
+
+  // Theme toggle — stored in localStorage so it works for ALL roles (no API needed)
+  const [localTheme, setLocalTheme] = useState(() => localStorage.getItem('theme') || 'system');
+
+  useEffect(() => {
+    const theme = localTheme === 'system' ? null : localTheme;
+    if (theme) {
+      document.documentElement.dataset.theme = theme;
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('theme', localTheme);
+  }, [localTheme]);
+
+  const toggleTheme = () => {
+    setLocalTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+  const isDark = localTheme === 'dark' ||
+    (localTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
     document.body.classList.toggle('ro', isReadOnly);
@@ -138,38 +160,66 @@ function Layout() {
           </button>
         </div>
         <div id="who" className="who">{whoText}</div>
-        <nav id="nav">
-          {NAV.filter(n => see(n[0])).map(([k, label, to]) => (
+        <nav id="nav" aria-label="Main navigation">
+          {NAV.filter(n => see(n[0])).map(([k, , to]) => (
             <NavLink
               key={k}
               to={to}
               end={to === '/'}
               className={({ isActive }) => (isActive ? 'active' : '')}
-              title={collapsed ? label : undefined}
+              title={collapsed ? t(k) : undefined}
             >
               <Icon name={k} />
-              <span>{label}</span>
+              <span>{t(k)}</span>
             </NavLink>
           ))}
         </nav>
       </aside>
 
-      <div id="ov" className={open ? 'on' : ''} onClick={() => setOpen(false)} />
+      {/* Skip to main content — accessibility */}
+      <a href="#main" className="skip-link">Skip to main content</a>
+
+      <div id="ov" className={open ? 'on' : ''} onClick={() => setOpen(false)} aria-hidden="true" />
 
       <div className={`wrap ${collapsed ? 'collapsed' : ''}`.trim()}>
-        <header className="top">
+        <header className="top" role="banner">
           <button
             className="btn"
             id="mb"
             aria-controls="side"
             aria-expanded={open}
+            aria-label={open ? t('close') : t('menu')}
             onClick={() => setOpen(!open)}
           >
-            {open ? 'Close' : 'Menu'}
+            {open ? t('close') : t('menu')}
           </button>
-          <strong id="pt">{currentNav[1]}</strong>
-          {isReadOnly && <span className="bd y" id="vo">View only</span>}
-          <span id="ay">Academic year {settings.year}</span>
+          <strong id="pt">{t(activeKey)}</strong>
+          {isReadOnly && <span className="bd y" id="vo">{t('viewOnly')}</span>}
+          <span id="ay">{t('academicYear')} {settings.year}</span>
+
+          {/* Language switcher */}
+          <button
+            className="btn sm"
+            aria-label={t('language')}
+            title={t('language')}
+            onClick={() => switchLang(lang === 'en' ? 'am' : 'en')}
+          >
+            🌐 {lang === 'en' ? 'EN' : 'አማ'}
+          </button>
+
+          {/* Dark / light mode toggle */}
+          <button
+            className="btn sm"
+            aria-label={isDark ? t('lightMode') : t('darkMode')}
+            title={isDark ? t('lightMode') : t('darkMode')}
+            onClick={toggleTheme}
+          >
+            {isDark ? '☀️' : '🌙'}
+          </button>
+
+          {/* Notification bell */}
+          <Notifications />
+
           <select
             id="role"
             aria-label="View as role (demo)"
@@ -182,13 +232,13 @@ function Layout() {
               </option>
             ))}
           </select>
-          <button className="btn sm signout-btn" onClick={logout} title="Sign out of system">
+          <button className="btn sm signout-btn" onClick={logout} title={t('signOut')} aria-label={t('signOut')}>
             <svg viewBox="0 0 24 24" className="ic" aria-hidden="true" style={{width:16,height:16}}>
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            Sign Out
+            {t('signOut')}
           </button>
         </header>
 
@@ -212,7 +262,7 @@ function Layout() {
           </Routes>
         </main>
         <footer className="app-footer">
-          <span>© {new Date().getFullYear()} School-Management SC. All rights reserved.</span>
+          <span>© {new Date().getFullYear()} School-Management SC. {t('allRights')}</span>
         </footer>
       </div>
     </>
