@@ -3,7 +3,7 @@ import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { ENT } from '../config/entities.js';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile, Icon } from '../components/index.js';
 
 const PER = 8;
 
@@ -302,26 +302,52 @@ export default function EntityPage({ k }) {
                       </td>
                     ))}
                     <td className="act" data-l="Actions">
-                      {cfg.hasProfile && (
-                        <button className="btn sm" onClick={() => viewProfile(r.id)}>
-                          View
-                        </button>
-                      )}
-                      {!cfg.hasProfile && (
-                        <button className="btn sm" onClick={() => setModal({ type: 'view', row: r })}>
-                          View
-                        </button>
-                      )}
-                      {write && (
-                        <>
-                          <button className="btn sm" onClick={() => setModal({ type: 'form', row: r })}>
-                            Edit
+                      <div className="act-group">
+                        {cfg.hasProfile && (
+                          <button
+                            type="button"
+                            className="btn sm icon-btn view-btn"
+                            title="View"
+                            aria-label={`View ${r.name || cfg.title}`}
+                            onClick={() => viewProfile(r.id)}
+                          >
+                            <Icon name="view" />
                           </button>
-                          <button className="btn sm" onClick={() => setModal({ type: 'del', row: r })}>
-                            Delete
+                        )}
+                        {!cfg.hasProfile && (
+                          <button
+                            type="button"
+                            className="btn sm icon-btn view-btn"
+                            title="View"
+                            aria-label={`View ${r.name || cfg.title}`}
+                            onClick={() => setModal({ type: 'view', row: r })}
+                          >
+                            <Icon name="view" />
                           </button>
-                        </>
-                      )}
+                        )}
+                        {write && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn sm icon-btn edit-btn"
+                              title="Edit"
+                              aria-label={`Edit ${r.name || cfg.title}`}
+                              onClick={() => setModal({ type: 'form', row: r })}
+                            >
+                              <Icon name="edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn sm icon-btn del-btn"
+                              title="Delete"
+                              aria-label={`Delete ${r.name || cfg.title}`}
+                              onClick={() => setModal({ type: 'del', row: r })}
+                            >
+                              <Icon name="delete" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

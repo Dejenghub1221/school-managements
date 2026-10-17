@@ -231,17 +231,31 @@ export default function Fees() {
                       <td data-l="Status"><Badge v={r.status} /></td>
                       {write && (
                         <td className="act" data-l="Actions">
-                          {bal > 0 && (
-                            <button className="btn sm" onClick={() => setModal({ type: 'pay', row: r })}>
-                              Pay
+                          <div className="act-group">
+                            {bal > 0 && (
+                              <button className="btn sm" onClick={() => setModal({ type: 'pay', row: r })}>
+                                Pay
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="btn sm icon-btn edit-btn"
+                              title="Edit"
+                              aria-label={`Edit fee record ${r.id}`}
+                              onClick={() => setModal({ type: 'form', row: r })}
+                            >
+                              <Icon name="edit" />
                             </button>
-                          )}
-                          <button className="btn sm" onClick={() => setModal({ type: 'form', row: r })}>
-                            Edit
-                          </button>
-                          <button className="btn sm" onClick={() => setModal({ type: 'del', row: r })}>
-                            Delete
-                          </button>
+                            <button
+                              type="button"
+                              className="btn sm icon-btn del-btn"
+                              title="Delete"
+                              aria-label={`Delete fee record ${r.id}`}
+                              onClick={() => setModal({ type: 'del', row: r })}
+                            >
+                              <Icon name="delete" />
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>

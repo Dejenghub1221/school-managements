@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { SUB } from '../config/entities.js';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, CsvModal } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, CsvModal, Icon } from '../components/index.js';
 
 export default function Exams() {
   const { can } = useAuth();
@@ -229,12 +229,26 @@ export default function Exams() {
                       <td data-l="Status"><Badge v={e.status} /></td>
                       {write && (
                         <td className="act" data-l="Actions">
-                          <button className="btn sm" onClick={() => setExamModal({ type: 'form', row: e })}>
-                            Edit
-                          </button>
-                          <button className="btn sm" onClick={() => setExamModal({ type: 'del', row: e })}>
-                            Delete
-                          </button>
+                          <div className="act-group">
+                            <button
+                              type="button"
+                              className="btn sm icon-btn edit-btn"
+                              title="Edit"
+                              aria-label={`Edit exam ${e.name}`}
+                              onClick={() => setExamModal({ type: 'form', row: e })}
+                            >
+                              <Icon name="edit" />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn sm icon-btn del-btn"
+                              title="Delete"
+                              aria-label={`Delete exam ${e.name}`}
+                              onClick={() => setExamModal({ type: 'del', row: e })}
+                            >
+                              <Icon name="delete" />
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
