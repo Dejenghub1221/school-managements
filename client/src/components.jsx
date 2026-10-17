@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSettings } from './settings.jsx';
+import { Icon } from './icons.jsx';
 
 export function Modal({ title, onClose, children }) {
   const ref = useRef();
@@ -101,9 +102,29 @@ export function StudentProfile({ profile, onBack, onEdit, onDelete, canWrite }) 
       <div className="head">
         {onBack && <button className="btn" onClick={onBack}>Back to students</button>}
         {canWrite && (
-          <span>
-            {onEdit && <button className="btn" onClick={() => onEdit(student)}>Edit</button>}{' '}
-            {onDelete && <button className="btn dg" onClick={() => onDelete(student)}>Delete</button>}
+          <span className="act-group">
+            {onEdit && (
+              <button
+                type="button"
+                className="btn sm icon-btn edit-btn"
+                title="Edit student"
+                aria-label="Edit student"
+                onClick={() => onEdit(student)}
+              >
+                <Icon name="edit" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                className="btn sm icon-btn del-btn"
+                title="Delete student"
+                aria-label="Delete student"
+                onClick={() => onDelete(student)}
+              >
+                <Icon name="delete" />
+              </button>
+            )}
           </span>
         )}
       </div>
