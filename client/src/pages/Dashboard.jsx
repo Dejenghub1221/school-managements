@@ -30,11 +30,44 @@ export default function Dashboard() {
   });
 
   if (family) {
+    const roleInfo = user.role === 'parent' ? {
+      title: 'Parents & Guardians',
+      color: '#0d7c66',
+      icon: '👨‍👩‍👧',
+      items: [
+        'Monitor your children\'s attendance, grades, and academic progress.',
+        'View fee balances, payment history, and school announcements.',
+        'Communicate with teachers and school administrators.',
+      ]
+    } : {
+      title: 'Student Portal',
+      color: '#0d7c66',
+      icon: '🎓',
+      items: [
+        'View your timetable, attendance, grades, and report cards.',
+        'Access assignments, learning materials, and announcements.',
+        'Track your academic progress and outstanding fees.',
+      ]
+    };
+
     return (
       <>
         <div className="head">
           <h1>{user.role === 'parent' ? 'My children' : 'My overview'}</h1>
           <span className="muted">{todayStr}</span>
+        </div>
+
+        {/* Role info card */}
+        <div className="card role-info-card" style={{ marginBottom: 24, borderLeft: `4px solid ${roleInfo.color}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: '1.6rem' }}>{roleInfo.icon}</span>
+            <h2 style={{ margin: 0 }}>{roleInfo.title}</h2>
+          </div>
+          <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {roleInfo.items.map((item, i) => (
+              <li key={i} style={{ color: 'var(--mu)', fontSize: 14 }}>{item}</li>
+            ))}
+          </ul>
         </div>
         {d.children?.map(c => (
           <div key={c.id} style={{ marginBottom: 24 }}>
