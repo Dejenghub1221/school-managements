@@ -48,13 +48,16 @@ export default function Login() {
         <h1>Sign in</h1>
 
       <div className="fld">
-        <label htmlFor="u">Username / Role</label>
-        <select id="u" value={u} onChange={e => setU(e.target.value)}>
-          <option value="admin">admin (Administrator)</option>
-          <option value="teacher">teacher (Teacher)</option>
-          <option value="student">student (Student)</option>
-          <option value="parent">parent (Parent)</option>
-        </select>
+        <label htmlFor="u">Username</label>
+        <input
+          id="u"
+          type="text"
+          value={u}
+          onChange={e => setU(e.target.value)}
+          placeholder="Enter username"
+          autoComplete="username"
+          required
+        />
       </div>
 
       <div className="fld">

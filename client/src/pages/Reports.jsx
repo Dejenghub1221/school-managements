@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/index.js';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { Badge, Empty, Skeleton, CsvModal, Toast } from '../components/index.js';
 
-const TABS = ['Students', 'Attendance', 'Academic', 'Fees'];
-
 export default function Reports() {
+  const { user } = useAuth();
   const { money, settings } = useSettings();
   const { t } = useLang();
+  const tabs = user?.role === 'teacher' ? ['Students', 'Attendance', 'Academic'] : ['Students', 'Attendance', 'Academic', 'Fees'];
   const [tab, setTab] = useState('Students');
   const [cls, setCls] = useState('');
   const [classes, setClasses] = useState([]);
@@ -77,7 +78,7 @@ export default function Reports() {
       </div>
 
       <div className="tabs" role="tablist" aria-label="Report type">
-        {TABS.map(tb => (
+        {tabs.map(tb => (
           <button key={tb} className="btn" role="tab"
             aria-selected={tb === tab} aria-pressed={tb === tab}
             onClick={() => setTab(tb)}>

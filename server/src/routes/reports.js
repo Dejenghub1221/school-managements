@@ -11,6 +11,11 @@ router.get('/', allow('reports'), async (req, res, next) => {
     const { tab = 'Students', cls = '' } = req.query;
     const mine = await myClasses(req.user);
 
+    // Teachers are strictly forbidden from viewing fee data (Problem 3)
+    if (tab === 'Fees' && req.user.role === 'teacher') {
+      return res.status(403).json({ error: 'Teachers are not permitted to view fee reports.' });
+    }
+
     // Build student filter
     const conditions = [];
     const params     = [];
@@ -20,13 +25,13 @@ router.get('/', allow('reports'), async (req, res, next) => {
 
     if (tab === 'Students') {
       const { rows } = await pool.query(
-        `SELECT s.id, s.name, s.cls, s.gender, s.status, p.name AS guardian
+        `SELECT s.id, s.name, s.cls, s.gender, s.status, p.name AS guardian, p.phone AS guardian_phone
          FROM students s LEFT JOIN parents p ON p.id=s.guardian ${where} ORDER BY s.name`,
         params
       );
       return res.json({
-        h: ['ID','Name','Class','Gender','Status','Guardian'],
-        r: rows.map(s => [s.id, s.name, s.cls, s.gender, s.status, s.guardian || ''])
+        h: ['ID','Name','Class','Gender','Status','Guardian','Guardian Phone'],
+        r: rows.map(s => [s.id, s.name, s.cls, s.gender, s.status, s.guardian || '', s.guardian_phone || ''])
       });
     }
 
@@ -54,7 +59,7 @@ router.get('/', allow('reports'), async (req, res, next) => {
       return res.json({ h: ['Student','Class','Total','Average','Grade'], r });
     }
 
-    // Fees tab
+    // Fees tab (Admin only)
     const { rows } = await pool.query(
       `SELECT f.*, s.name AS sname, s.cls FROM fees f
        JOIN students s ON s.id=f.student ${where.replace(/s\./g, 's.')} ORDER BY s.name`,

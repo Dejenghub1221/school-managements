@@ -72,16 +72,20 @@ router.get('/overview', allow('dashboard'), async (req, res, next) => {
     if (!own) return res.status(403).json({ error: 'Use /api/stats.' });
 
     const { rows: students } = await pool.query(
-      `SELECT s.*, p.name AS "guardianName"
+      `SELECT s.*, p.name AS "guardianName", p.phone AS "guardianPhone"
        FROM students s LEFT JOIN parents p ON p.id=s.guardian
        WHERE s.id=ANY($1)`,
       [own]
     );
 
+    const childrenClasses = [...new Set(students.map(s => s.cls))];
+
     const children = await Promise.all(students.map(async s => {
       const [fees, marks, a, c] = await Promise.all([
         pool.query('SELECT *, amount::float AS amount, paid::float AS paid FROM fees WHERE student=$1', [s.id]).then(r => r.rows),
-        pool.query('SELECT subject, mark FROM marks WHERE student_id=$1', [s.id]).then(r => Object.fromEntries(r.rows.map(m => [m.subject, m.mark]))),
+        pool.query('SELECT subject, mark, comments FROM marks WHERE student_id=$1', [s.id]).then(r =>
+          Object.fromEntries(r.rows.map(m => [m.subject, m.mark]))
+        ),
         avg(s.id),
         attOf([s.id])
       ]);
@@ -93,8 +97,25 @@ router.get('/overview', allow('dashboard'), async (req, res, next) => {
       };
     }));
 
-    const { rows: upcomingExams } = await pool.query("SELECT * FROM exams WHERE status='Scheduled'");
-    res.json({ children, upcomingExams });
+    // Problem 5 fix: Students and parents ONLY see exams for their own classes or 'All'
+    const { rows: upcomingExams } = await pool.query(
+      `SELECT * FROM exams
+       WHERE status='Scheduled' AND (cls='All' OR cls=ANY($1))
+       ORDER BY date ASC`,
+      [childrenClasses.length ? childrenClasses : ['All']]
+    );
+
+    // Also get active announcements for this role / class
+    const role = req.user.role === 'parent' ? 'Parent' : 'Student';
+    const { rows: announcements } = await pool.query(
+      `SELECT * FROM announcements
+       WHERE (target_role='All' OR target_role=$1)
+         AND (cls='All' OR cls=ANY($2))
+       ORDER BY created_at DESC LIMIT 5`,
+      [role, childrenClasses.length ? childrenClasses : ['All']]
+    );
+
+    res.json({ children, upcomingExams, announcements });
   } catch (err) { next(err); }
 });
 

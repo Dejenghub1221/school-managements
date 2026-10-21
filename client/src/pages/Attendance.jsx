@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Badge, Empty, Skeleton, Toast } from '../components/index.js';
+import { Badge, Empty, Modal, Skeleton, Toast } from '../components/index.js';
 
 const STATUS = [
   ['P', 'Present'],
@@ -15,22 +15,29 @@ export default function Attendance() {
   const { can, user } = useAuth();
   const write = can('attendance');
   const isFamily = user?.role === 'student' || user?.role === 'parent';
+  const isParent = user?.role === 'parent';
 
   const [date, setDate] = useState(today);
   const [cls, setCls] = useState('');
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState(null);
   const [marks, setMarks] = useState({});
+  const [reportedAbsences, setReportedAbsences] = useState({});
   const [summary, setSummary] = useState([]);
   const [familyData, setFamilyData] = useState(null);
+  const [absenceModal, setAbsenceModal] = useState(false);
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
 
+  const loadFamily = () => {
+    api('/attendance')
+      .then(d => setFamilyData(d))
+      .catch(x => setErr(x.message));
+  };
+
   useEffect(() => {
     if (isFamily) {
-      api('/attendance')
-        .then(d => setFamilyData(d))
-        .catch(x => setErr(x.message));
+      loadFamily();
     } else {
       api('/classes-list')
         .then(c => {
@@ -49,6 +56,7 @@ export default function Attendance() {
       .then(d => {
         setStudents(d.students);
         setMarks(Object.fromEntries(d.students.map(s => [s.id, d.records[s.id] || 'P'])));
+        setReportedAbsences(d.reportedAbsences || {});
         if (d.classSummary) setSummary(d.classSummary);
       })
       .catch(x => setErr(x.message));
@@ -58,9 +66,9 @@ export default function Attendance() {
     try {
       const r = await api('/attendance', { method: 'PUT', body: { date, records: marks } });
       setToast(`Attendance saved for ${date}.`);
-      // Refresh summary
       const d = await api(`/attendance?date=${date}&cls=${cls}`);
       if (d.classSummary) setSummary(d.classSummary);
+      if (d.reportedAbsences) setReportedAbsences(d.reportedAbsences);
     } catch (x) {
       setToast(x.message);
     }
@@ -69,17 +77,49 @@ export default function Attendance() {
   const markAllPresent = () => {
     if (!students) return;
     const all = {};
-    students.forEach(s => { all[s.id] = 'P'; });
+    students.forEach(s => {
+      // Keep reported absence as E, otherwise P
+      all[s.id] = reportedAbsences[s.id] ? 'E' : 'P';
+    });
     setMarks(all);
+  };
+
+  const submitAbsenceReport = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      studentId: fd.get('studentId')?.toString(),
+      date: fd.get('date')?.toString(),
+      reason: fd.get('reason')?.toString()
+    };
+    if (!body.studentId || !body.date || !body.reason) {
+      setToast('Please provide all details.');
+      return;
+    }
+    try {
+      await api('/absences', { method: 'POST', body });
+      setToast('Absence reported in advance. Teacher will be notified.');
+      setAbsenceModal(false);
+      loadFamily();
+    } catch (x) {
+      setToast(x.message);
+    }
   };
 
   if (isFamily) {
     if (err) return <Empty title="Couldn’t load attendance" text={err} />;
     if (!familyData) return <Skeleton />;
-    const { stats, history } = familyData;
+    const { stats, history, absences = [] } = familyData;
     return (
       <>
-        <div className="head"><h1>Attendance</h1></div>
+        <div className="head">
+          <h1>Attendance</h1>
+          {isParent && (
+            <button className="btn pr" onClick={() => setAbsenceModal(true)}>
+              📝 Report absence in advance
+            </button>
+          )}
+        </div>
         <div className="chips">
           <span className="bd g">Rate: {stats.rate}%</span>
           <span className="bd">Present {stats.P}</span>
@@ -87,6 +127,35 @@ export default function Attendance() {
           <span className="bd y">Late {stats.L}</span>
           <span className="bd y">Excused {stats.E}</span>
         </div>
+
+        {absences.length > 0 && (
+          <div style={{ margin: '18px 0' }}>
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Reported Absences</h2>
+            <div className="tw">
+              <table className="rt">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Student</th>
+                    <th scope="col">Reason</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {absences.map(a => (
+                    <tr key={a.id}>
+                      <td data-l="Date">{a.date}</td>
+                      <td data-l="Student">{a.studentName}</td>
+                      <td data-l="Reason">{a.reason}</td>
+                      <td data-l="Status"><Badge v={a.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {history.length ? (
           <div className="tw">
             <table className="rt">
@@ -116,6 +185,43 @@ export default function Attendance() {
             <p className="muted" style={{ marginTop: 8 }}>Attendance records will appear here once a teacher marks them.</p>
           </div>
         )}
+
+        {/* Modal for reporting absence */}
+        {absenceModal && (
+          <Modal title="Report Advance Absence" onClose={() => setAbsenceModal(false)}>
+            <form onSubmit={submitAbsenceReport} noValidate>
+              <div className="fld">
+                <label htmlFor="abs_sid">Student *</label>
+                <select id="abs_sid" name="studentId" required>
+                  {/* Pull student ID from history or user */}
+                  {[...new Set(history.map(h => ({ id: h.studentId, name: h.studentName })))].map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.id})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="fld">
+                <label htmlFor="abs_dt">Date of absence *</label>
+                <input id="abs_dt" name="date" type="date" min={today} defaultValue={today} required />
+              </div>
+              <div className="fld">
+                <label htmlFor="abs_rsn">Reason for absence *</label>
+                <textarea
+                  id="abs_rsn"
+                  name="reason"
+                  rows={3}
+                  placeholder="e.g. Doctor appointment, family emergency, travel"
+                  required
+                />
+              </div>
+              <div className="acts">
+                <button type="button" className="btn" onClick={() => setAbsenceModal(false)}>Cancel</button>
+                <button className="btn pr">Submit report</button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        <Toast msg={toast} onDone={() => setToast('')} />
       </>
     );
   }
@@ -170,32 +276,47 @@ export default function Attendance() {
             <thead>
               <tr>
                 <th scope="col">Student</th>
+                <th scope="col">Notes / Notice</th>
                 <th scope="col">Status</th>
               </tr>
             </thead>
             <tbody>
-              {students.map(s => (
-                <tr key={s.id}>
-                  <td data-l="Student">{s.name}</td>
-                  <td data-l="Status">
-                    <div className="seg" role="radiogroup" aria-label={'Status for ' + s.name}>
-                      {STATUS.map(([c, l]) => (
-                        <label key={c}>
-                          <input
-                            type="radio"
-                            name={'s_' + s.id}
-                            value={c}
-                            checked={marks[s.id] === c}
-                            disabled={!write}
-                            onChange={() => setMarks(m => ({ ...m, [s.id]: c }))}
-                          />
-                          <span>{l}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {students.map(s => {
+                const abs = reportedAbsences[s.id];
+                return (
+                  <tr key={s.id}>
+                    <td data-l="Student"><strong>{s.name}</strong></td>
+                    <td data-l="Notes / Notice">
+                      {abs ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span className="bd y" title={`Reported by ${abs.parentName} (${abs.parentPhone})`}>
+                            Parent Reported: {abs.reason}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td data-l="Status">
+                      <div className="seg" role="radiogroup" aria-label={'Status for ' + s.name}>
+                        {STATUS.map(([c, l]) => (
+                          <label key={c}>
+                            <input
+                              type="radio"
+                              name={'s_' + s.id}
+                              value={c}
+                              checked={marks[s.id] === c}
+                              disabled={!write}
+                              onChange={() => setMarks(m => ({ ...m, [s.id]: c }))}
+                            />
+                            <span>{l}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

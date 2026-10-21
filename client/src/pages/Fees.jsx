@@ -9,31 +9,37 @@ const PER = 8;
 const today = new Date().toISOString().slice(0, 10);
 
 export default function Fees() {
-  const { can } = useAuth();
-  const { money } = useSettings();
+  const { user, can } = useAuth();
+  const { money, settings } = useSettings();
   const write = can('fees');
+  const isAdmin = user?.role === 'admin';
+  const isParent = user?.role === 'parent';
 
   const [fees, setFees] = useState(null);
   const [students, setStudents] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [payments, setPayments] = useState([]);
   const [q, setQ] = useState('');
   const [flt, setFlt] = useState('');
   const [pg, setPg] = useState(1);
 
   const [modal, setModal] = useState(null);
+  const [receiptData, setReceiptData] = useState(null);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
 
   const load = async () => {
     try {
-      const [fData, sData, pData] = await Promise.all([
+      const [fData, sData, pData, cData] = await Promise.all([
         api('/fees'),
         api('/students'),
-        api('/payments')
+        api('/payments'),
+        api('/classes-list').catch(() => ['7A','7B','8A','8B','9A','9B'])
       ]);
       setFees(fData);
       setStudents(sData);
       setPayments(pData);
+      setClasses(cData || []);
     } catch (x) {
       setErr(x.message);
     }
@@ -110,8 +116,40 @@ export default function Fees() {
       return;
     }
     try {
-      await api(`/fees/${modal.row.id}/pay`, { method: 'POST', body: { amount: amt, date } });
-      setToast('Payment recorded.');
+      const res = await api(`/fees/${modal.row.id}/pay`, { method: 'POST', body: { amount: amt, date } });
+      setToast('Payment recorded successfully.');
+      setModal(null);
+      // Show official receipt modal
+      setReceiptData({
+        receiptId: res.receiptId || `RCP_${Date.now().toString().slice(-6)}`,
+        studentName: studentName(modal.row.student),
+        term: modal.row.term,
+        amount: amt,
+        date: date,
+        balance: modal.row.amount - (modal.row.paid + amt)
+      });
+      load();
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const handleClassFeeStructure = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const cls = fd.get('cls')?.toString();
+    const term = fd.get('term')?.toString();
+    const amount = Number(fd.get('amount'));
+    if (!cls || !term || !(amount > 0)) {
+      setToast('Fill in all fee structure fields.');
+      return;
+    }
+    try {
+      const res = await api('/admin-actions/fee-structure', {
+        method: 'POST',
+        body: { cls, term, amount }
+      });
+      setToast(res.message);
       setModal(null);
       load();
     } catch (x) {
@@ -128,6 +166,10 @@ export default function Fees() {
     } catch (x) {
       setToast(x.message);
     }
+  };
+
+  const handlePrintReceipt = () => {
+    try { window.print(); } catch { setToast('Printing not available here.'); }
   };
 
   return (
@@ -157,13 +199,20 @@ export default function Fees() {
 
       <div className="head">
         <h1>Fees & Payments</h1>
-        {write ? (
-          <button className="btn pr" onClick={() => setModal({ type: 'form' })}>
-            Add fee record
-          </button>
-        ) : (
-          <span className="bd y">View only</span>
-        )}
+        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {write ? (
+            <>
+              <button className="btn pr" onClick={() => setModal({ type: 'form' })}>
+                Add fee record
+              </button>
+              <button className="btn" onClick={() => setModal({ type: 'classFee' })}>
+                🏷️ Set class fee structure
+              </button>
+            </>
+          ) : (
+            <span className="bd y">View only</span>
+          )}
+        </span>
       </div>
 
       <div className="tb">
@@ -214,7 +263,7 @@ export default function Fees() {
                   <th scope="col">Paid</th>
                   <th scope="col">Balance</th>
                   <th scope="col">Status</th>
-                  {write && <th scope="col">Actions</th>}
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,35 +278,53 @@ export default function Fees() {
                       <td data-l="Paid">{money(r.paid)}</td>
                       <td data-l="Balance">{money(bal)}</td>
                       <td data-l="Status"><Badge v={r.status} /></td>
-                      {write && (
-                        <td className="act" data-l="Actions">
-                          <div className="act-group">
-                            {bal > 0 && (
-                              <button className="btn sm" onClick={() => setModal({ type: 'pay', row: r })}>
-                                Pay
+                      <td className="act" data-l="Actions">
+                        <div className="act-group">
+                          {bal > 0 && (write || isParent) && (
+                            <button className="btn sm pr" onClick={() => setModal({ type: 'pay', row: r })}>
+                              {isParent ? '💳 Pay online' : 'Pay'}
+                            </button>
+                          )}
+                          {r.paid > 0 && (
+                            <button
+                              type="button"
+                              className="btn sm"
+                              onClick={() => setReceiptData({
+                                receiptId: `RCP_${r.id}`,
+                                studentName: studentName(r.student),
+                                term: r.term,
+                                amount: r.paid,
+                                date: r.date || today,
+                                balance: bal
+                              })}
+                            >
+                              🧾 Receipt
+                            </button>
+                          )}
+                          {write && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn sm icon-btn edit-btn"
+                                title="Edit"
+                                aria-label={`Edit fee record ${r.id}`}
+                                onClick={() => setModal({ type: 'form', row: r })}
+                              >
+                                <Icon name="edit" />
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              className="btn sm icon-btn edit-btn"
-                              title="Edit"
-                              aria-label={`Edit fee record ${r.id}`}
-                              onClick={() => setModal({ type: 'form', row: r })}
-                            >
-                              <Icon name="edit" />
-                            </button>
-                            <button
-                              type="button"
-                              className="btn sm icon-btn del-btn"
-                              title="Delete"
-                              aria-label={`Delete fee record ${r.id}`}
-                              onClick={() => setModal({ type: 'del', row: r })}
-                            >
-                              <Icon name="delete" />
-                            </button>
-                          </div>
-                        </td>
-                      )}
+                              <button
+                                type="button"
+                                className="btn sm icon-btn del-btn"
+                                title="Delete"
+                                aria-label={`Delete fee record ${r.id}`}
+                                onClick={() => setModal({ type: 'del', row: r })}
+                              >
+                                <Icon name="delete" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -292,6 +359,7 @@ export default function Fees() {
               <th scope="col">Student</th>
               <th scope="col">Date</th>
               <th scope="col">Amount</th>
+              <th scope="col">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -302,11 +370,27 @@ export default function Fees() {
                   <td data-l="Student">{p.studentName || studentName(p.studentId)}</td>
                   <td data-l="Date">{p.date}</td>
                   <td data-l="Amount">{money(p.amount)}</td>
+                  <td data-l="Action">
+                    <button
+                      type="button"
+                      className="btn sm"
+                      onClick={() => setReceiptData({
+                        receiptId: p.receiptId || p.id,
+                        studentName: p.studentName || studentName(p.studentId),
+                        term: 'Term Payment',
+                        amount: p.amount,
+                        date: p.date,
+                        balance: 0
+                      })}
+                    >
+                      🧾 View receipt
+                    </button>
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan={4} className="muted" style={{ textAlign: 'center', padding: 20 }}>
+                <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 20 }}>
                   No payment history yet.
                 </td>
               </tr>
@@ -315,12 +399,12 @@ export default function Fees() {
         </table>
       </div>
 
-      {/* Pay modal */}
+      {/* Pay modal (Online payment for parents / Record payment for admin) */}
       {modal?.type === 'pay' && (
-        <Modal title={`Record payment for ${studentName(modal.row.student)}`} onClose={() => setModal(null)}>
+        <Modal title={`${isParent ? 'Pay fees online' : 'Record payment'} for ${studentName(modal.row.student)}`} onClose={() => setModal(null)}>
           <form onSubmit={handlePay} noValidate>
             <div className="fld">
-              <label htmlFor="p_amt">Amount *</label>
+              <label htmlFor="p_amt">Amount ({settings?.cur || '$'}) *</label>
               <input
                 id="p_amt"
                 name="amt"
@@ -331,13 +415,56 @@ export default function Fees() {
                 required
               />
             </div>
+            {isParent ? (
+              <div className="fld">
+                <label>Payment method</label>
+                <select defaultValue="card">
+                  <option value="card">Credit / Debit Card</option>
+                  <option value="bank">Mobile Banking / Bank Transfer</option>
+                </select>
+              </div>
+            ) : (
+              <div className="fld">
+                <label htmlFor="p_date">Date *</label>
+                <input id="p_date" name="date" type="date" defaultValue={today} required />
+              </div>
+            )}
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => setModal(null)}>Cancel</button>
+              <button className="btn pr">{isParent ? 'Authorize & pay online' : 'Record payment'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Set class fee structure modal (Admin) */}
+      {modal?.type === 'classFee' && (
+        <Modal title="Set Fee Structure per Class" onClose={() => setModal(null)}>
+          <form onSubmit={handleClassFeeStructure} noValidate>
+            <p className="muted" style={{ marginBottom: 14 }}>
+              This will create or update the fee billing for all active students in the selected class.
+            </p>
             <div className="fld">
-              <label htmlFor="p_date">Date *</label>
-              <input id="p_date" name="date" type="date" defaultValue={today} required />
+              <label htmlFor="cfs_cls">Class *</label>
+              <select id="cfs_cls" name="cls" required>
+                {classes.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="fld">
+              <label htmlFor="cfs_term">Term *</label>
+              <select id="cfs_term" name="term" required>
+                <option value="Term 1">Term 1</option>
+                <option value="Term 2">Term 2</option>
+                <option value="Term 3">Term 3</option>
+              </select>
+            </div>
+            <div className="fld">
+              <label htmlFor="cfs_amt">Amount per student ({settings?.cur || '$'}) *</label>
+              <input id="cfs_amt" name="amount" type="number" min="1" placeholder="e.g. 500" required />
             </div>
             <div className="acts">
               <button type="button" className="btn" onClick={() => setModal(null)}>Cancel</button>
-              <button className="btn pr">Record payment</button>
+              <button className="btn pr">Apply fee structure</button>
             </div>
           </form>
         </Modal>
@@ -351,7 +478,7 @@ export default function Fees() {
               <label htmlFor="f_stud">Student *</label>
               <select id="f_stud" name="student" defaultValue={modal.row?.student || ''} required>
                 <option value="" />
-                {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {students.map(s => <option key={s.id} value={s.id}>{s.name} ({s.cls})</option>)}
               </select>
             </div>
             <div className="fld">
@@ -388,6 +515,37 @@ export default function Fees() {
               <button className="btn pr">{modal.row ? 'Save changes' : 'Add fee record'}</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Official Receipt Modal */}
+      {receiptData && (
+        <Modal title="Official Payment Receipt" onClose={() => setReceiptData(null)}>
+          <div className="print-area" style={{ padding: 12 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid var(--bd)', paddingBottom: 10 }}>
+              <h2 style={{ margin: 0 }}>{settings?.school || 'ABC Academy'}</h2>
+              <div className="muted">Fee Payment Receipt · {receiptData.receiptId}</div>
+            </div>
+            <dl style={{ marginBottom: 16 }}>
+              <dt>Receipt No</dt><dd><b>{receiptData.receiptId}</b></dd>
+              <dt>Student</dt><dd>{receiptData.studentName}</dd>
+              <dt>Description</dt><dd>{receiptData.term}</dd>
+              <dt>Payment Date</dt><dd>{receiptData.date}</dd>
+              <dt>Amount Paid</dt><dd><b>{money(receiptData.amount)}</b></dd>
+              {receiptData.balance !== undefined && (
+                <>
+                  <dt>Remaining Balance</dt><dd>{money(receiptData.balance)}</dd>
+                </>
+              )}
+            </dl>
+            <div style={{ textAlign: 'center', padding: '10px 0', borderTop: '1px dashed var(--bd)' }}>
+              <span className="bd g">Payment Verified · Thank you</span>
+            </div>
+            <div className="acts" style={{ marginTop: 14 }}>
+              <button type="button" className="btn pr" onClick={handlePrintReceipt}>🖨 Print / Download receipt</button>
+              <button type="button" className="btn" onClick={() => setReceiptData(null)}>Close</button>
+            </div>
+          </div>
         </Modal>
       )}
 
