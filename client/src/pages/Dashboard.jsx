@@ -3,21 +3,36 @@ import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { Icon } from '../icons.jsx';
-import { Badge, Empty, Skeleton, StudentProfile } from '../components/index.js';
+import { Badge, Empty, Modal, Skeleton, StudentProfile, Toast } from '../components/index.js';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { money } = useSettings();
   const family = user?.role === 'student' || user?.role === 'parent';
+  const isParent = user?.role === 'parent';
   const [d, setD] = useState(null);
+  const [activeChildId, setActiveChildId] = useState('all');
+  const [showTrends, setShowTrends] = useState(false);
+  const [reportCard, setReportCard] = useState(null);
+  const [meetingModal, setMeetingModal] = useState(false);
+  const [trips, setTrips] = useState([]);
+  const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
 
-  useEffect(() => {
+  const loadData = () => {
     setErr('');
-    setD(null);
     api(family ? '/overview' : '/stats')
-      .then(setD)
+      .then(res => {
+        setD(res);
+        if (family) {
+          api('/trip-consents').then(setTrips).catch(() => {});
+        }
+      })
       .catch(x => setErr(x.message));
+  };
+
+  useEffect(() => {
+    loadData();
   }, [family]);
 
   if (err) return <Empty title="Couldn’t load the dashboard" text={err} />;
@@ -29,60 +44,214 @@ export default function Dashboard() {
     month: 'long'
   });
 
-  if (family) {
-    const roleInfo = user.role === 'parent' ? {
-      title: 'Parents & Guardians',
-      color: '#0d7c66',
-      icon: '👨‍👩‍👧',
-      items: [
-        'Monitor your children\'s attendance, grades, and academic progress.',
-        'View fee balances, payment history, and school announcements.',
-        'Communicate with teachers and school administrators.',
-      ]
-    } : {
-      title: 'Student Portal',
-      color: '#0d7c66',
-      icon: '🎓',
-      items: [
-        'View your timetable, attendance, grades, and report cards.',
-        'Access assignments, learning materials, and announcements.',
-        'Track your academic progress and outstanding fees.',
-      ]
+  const openReportCard = async studentId => {
+    try {
+      const card = await api(`/students/${studentId}/report-card`);
+      setReportCard(card);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const handleTripConsent = async (tripId, consent) => {
+    try {
+      await api(`/trip-consents/${tripId}`, {
+        method: 'PUT',
+        body: { consent }
+      });
+      setToast(consent ? 'Consent given.' : 'Consent revoked.');
+      api('/trip-consents').then(setTrips).catch(() => {});
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const handleBookMeeting = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      recipientId: fd.get('teacher')?.toString() || 'T01',
+      recipientRole: 'teacher',
+      recipientName: 'Class Teacher',
+      subject: fd.get('subject')?.toString() || 'Parent-Teacher Meeting',
+      meetingDate: fd.get('meetingDate')?.toString(),
+      body: fd.get('notes')?.toString()
     };
+    try {
+      await api('/messages', { method: 'POST', body });
+      setToast('Meeting request sent to teacher.');
+      setMeetingModal(false);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  if (family) {
+    const displayedChildren = activeChildId === 'all'
+      ? (d.children || [])
+      : (d.children || []).filter(c => c.id === activeChildId);
 
     return (
       <>
         <div className="head">
-          <h1>{user.role === 'parent' ? 'My children' : 'My overview'}</h1>
-          <span className="muted">{todayStr}</span>
+          <div>
+            <h1>{user.role === 'parent' ? 'Family portal' : 'Student overview'}</h1>
+            <span className="muted">{todayStr}</span>
+          </div>
+          {isParent && (
+            <button className="btn pr" onClick={() => setMeetingModal(true)}>
+              📅 Book teacher meeting
+            </button>
+          )}
         </div>
 
-        {/* Role info card */}
-        <div className="card role-info-card" style={{ marginBottom: 24, borderLeft: `4px solid ${roleInfo.color}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <span style={{ fontSize: '1.6rem' }}>{roleInfo.icon}</span>
-            <h2 style={{ margin: 0 }}>{roleInfo.title}</h2>
-          </div>
-          <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {roleInfo.items.map((item, i) => (
-              <li key={i} style={{ color: 'var(--mu)', fontSize: 14 }}>{item}</li>
+        {/* Parent Multi-child switcher (Page 4) */}
+        {isParent && d.children && d.children.length > 1 && (
+          <div className="tabs" style={{ marginBottom: 16 }}>
+            <button
+              className="btn"
+              aria-pressed={activeChildId === 'all'}
+              onClick={() => setActiveChildId('all')}
+            >
+              All children ({d.children.length})
+            </button>
+            {d.children.map(c => (
+              <button
+                key={c.id}
+                className="btn"
+                aria-pressed={activeChildId === c.id}
+                onClick={() => setActiveChildId(c.id)}
+              >
+                {c.name} ({c.cls})
+              </button>
             ))}
-          </ul>
-        </div>
-        {d.children?.map(c => (
+          </div>
+        )}
+
+        {/* Announcements section */}
+        {d.announcements && d.announcements.length > 0 && (
+          <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid var(--ac)' }}>
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>📢 School & Class Announcements</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {d.announcements.map(ann => (
+                <div key={ann.id} style={{ borderBottom: '1px solid var(--bd)', paddingBottom: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{ann.title}</strong>
+                    <small className="muted">{new Date(ann.created_at).toLocaleDateString()}</small>
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontSize: 14 }}>{ann.content}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Children profiles */}
+        {displayedChildren.map(c => (
           <div key={c.id} style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span className="bd g">Class {c.cls} · {c.name}</span>
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setShowTrends(prev => (prev === c.id ? null : c.id))}
+                >
+                  📈 {showTrends === c.id ? 'Hide grade trends' : 'Grade trends'}
+                </button>
+                <button
+                  type="button"
+                  className="btn sm pr"
+                  onClick={() => openReportCard(c.id)}
+                >
+                  📄 Download report card
+                </button>
+              </span>
+            </div>
+
+            {/* Grade trends per subject (Page 4) */}
+            {showTrends === c.id && (
+              <div className="card" style={{ marginBottom: 14 }}>
+                <h3 style={{ margin: '0 0 10px', fontSize: 15 }}>Grade trends per subject — {c.name}</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {Object.entries(c.academic?.marks || {}).map(([subj, val]) => (
+                    <div key={subj} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ width: 110, fontSize: 13, fontWeight: 500 }}>{subj}</span>
+                      <div style={{ flex: 1, background: 'var(--bd)', height: 10, borderRadius: 5, overflow: 'hidden' }}>
+                        <div
+                          style={{
+                            width: `${val}%`,
+                            height: '100%',
+                            background: val >= 80 ? 'var(--ac)' : val >= 60 ? '#f39c12' : '#e74c3c'
+                          }}
+                        />
+                      </div>
+                      <span style={{ width: 45, textAlign: 'right', fontSize: 13, fontWeight: 'bold' }}>{val}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <StudentProfile
               profile={{
                 student: c,
-                guardian: { name: c.guardianName },
+                guardian: { name: c.guardianName, phone: c.guardianPhone },
                 attendance: c.attendance,
                 academic: c.academic,
                 fees: c.fees
               }}
               canWrite={false}
+              onReportCard={() => openReportCard(c.id)}
             />
           </div>
         ))}
+
+        {/* Trips & Excursions Consent (Page 4) */}
+        {isParent && trips.length > 0 && (
+          <div className="card" style={{ marginTop: 20 }}>
+            <h2>Trip consent & excursions</h2>
+            <div className="tw" style={{ marginTop: 10 }}>
+              <table className="rt">
+                <thead>
+                  <tr>
+                    <th scope="col">Trip</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Student</th>
+                    <th scope="col">Consent Status</th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trips.map(tr => (
+                    <tr key={tr.id}>
+                      <td data-l="Trip">
+                        <strong>{tr.trip_name}</strong>
+                        <div style={{ fontSize: 12, color: 'var(--mu)' }}>{tr.details}</div>
+                      </td>
+                      <td data-l="Date">{tr.trip_date}</td>
+                      <td data-l="Student">{tr.studentName}</td>
+                      <td data-l="Consent Status">
+                        <Badge v={tr.consent ? 'Active' : 'Unpaid'} />
+                        <span style={{ marginLeft: 6 }}>{tr.consent ? 'Consented' : 'Pending'}</span>
+                      </td>
+                      <td data-l="Action">
+                        <button
+                          type="button"
+                          className={`btn sm ${tr.consent ? 'dg' : 'pr'}`}
+                          onClick={() => handleTripConsent(tr.id, !tr.consent)}
+                        >
+                          {tr.consent ? 'Revoke consent' : 'Give consent'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <div className="card" style={{ marginTop: 16 }}>
           <h2>Upcoming exams</h2>
           <ul className="l" style={{ marginTop: 8 }}>
@@ -94,14 +263,97 @@ export default function Dashboard() {
                 </li>
               ))
             ) : (
-              <li>No exams scheduled.</li>
+              <li>No exams scheduled for your class.</li>
             )}
           </ul>
         </div>
+
+        {/* Report Card Modal */}
+        {reportCard && (
+          <Modal title="Student Report Card" onClose={() => setReportCard(null)}>
+            <div className="print-area" style={{ padding: 12 }}>
+              <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid var(--bd)', paddingBottom: 12 }}>
+                <h2 style={{ margin: 0 }}>{reportCard.school}</h2>
+                <div className="muted">Official Academic Report Card · {reportCard.academicYear}</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 14 }}>
+                <div><strong>Student:</strong> {reportCard.student.name}</div>
+                <div><strong>ID:</strong> {reportCard.student.id}</div>
+                <div><strong>Class:</strong> {reportCard.student.cls}</div>
+                <div><strong>Attendance:</strong> {reportCard.attendance.rate}%</div>
+              </div>
+
+              <table className="rt" style={{ width: '100%', marginBottom: 16 }}>
+                <thead>
+                  <tr>
+                    <th scope="col">Subject</th>
+                    <th scope="col">Mark</th>
+                    <th scope="col">Grade</th>
+                    <th scope="col">Teacher Comment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportCard.marks.map(m => (
+                    <tr key={m.subject}>
+                      <td>{m.subject}</td>
+                      <td><b>{m.mark}</b> / 100</td>
+                      <td><Badge v={m.grade} /></td>
+                      <td>{m.comment || 'Good progress.'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: 'var(--bg-card)', borderRadius: 'var(--rd)' }}>
+                <div><b>Total:</b> {reportCard.total}</div>
+                <div><b>Average:</b> {reportCard.average}%</div>
+                <div><b>Final Grade:</b> <Badge v={reportCard.finalGrade} /></div>
+              </div>
+
+              <div className="acts" style={{ marginTop: 18 }}>
+                <button type="button" className="btn pr" onClick={() => window.print()}>🖨 Print / Download</button>
+                <button type="button" className="btn" onClick={() => setReportCard(null)}>Close</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Book Meeting Modal */}
+        {meetingModal && (
+          <Modal title="Book Parent-Teacher Consultation" onClose={() => setMeetingModal(false)}>
+            <form onSubmit={handleBookMeeting} noValidate>
+              <div className="fld">
+                <label htmlFor="pm_sub">Topic / Purpose *</label>
+                <input id="pm_sub" name="subject" defaultValue="Academic Progress Discussion" required />
+              </div>
+              <div className="fld">
+                <label htmlFor="pm_dt">Preferred Date *</label>
+                <input id="pm_dt" name="meetingDate" type="date" min={today} defaultValue={today} required />
+              </div>
+              <div className="fld">
+                <label htmlFor="pm_notes">Notes / Specific questions for teacher *</label>
+                <textarea
+                  id="pm_notes"
+                  name="notes"
+                  rows={3}
+                  placeholder="Share any questions regarding homework, attendance, or progress..."
+                  required
+                />
+              </div>
+              <div className="acts">
+                <button type="button" className="btn" onClick={() => setMeetingModal(false)}>Cancel</button>
+                <button className="btn pr">Send request</button>
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        <Toast msg={toast} onDone={() => setToast('')} />
       </>
     );
   }
 
+  // Admin / Teacher View
   const rate = d.billed ? Math.round((d.collected / d.billed) * 100) : 0;
   const lastAtt = d.attendance?.at(-1)?.pct ?? 0;
 
@@ -237,6 +489,8 @@ export default function Dashboard() {
           </tbody>
         </table>
       </div>
+
+      <Toast msg={toast} onDone={() => setToast('')} />
     </>
   );
 }

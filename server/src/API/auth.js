@@ -12,7 +12,7 @@ const PM = {
 };
 const KEYS = ['dashboard','students','teachers','classes','subjects','attendance','exams','assignments','fees','parents','timetable','library','reports','settings'];
 export const perm = (role, k) => (role === 'admin' ? 'w' : PM[role]?.[k] || '');
-const permissions = role => Object.fromEntries(KEYS.map(k => [k, perm(role, k)]).filter(([, v]) => v));
+export const permissions = role => Object.fromEntries(KEYS.map(k => [k, perm(role, k)]).filter(([, v]) => v));
 
 const hash = bcrypt.hashSync(process.env.DEMO_PASSWORD || 'school123', 8);
 const USERS = [
@@ -22,19 +22,61 @@ const USERS = [
   { username: 'parent',  role: 'parent',  name: 'Abebe',         parentId: 'P23' },
 ];
 
-// Bump TOKEN_VERSION to invalidate all existing sessions (forces fresh login)
 const TOKEN_VERSION = 2;
 
-export function login(req, res) {
-  const { username, password } = req.body || {};
-  const user = USERS.find(u => u.username === username);
-  if (!user || !bcrypt.compareSync(String(password || ''), hash))
-    return res.status(401).json({ error: 'Wrong username or password.' });
-  res.json({
-    token: jwt.sign({ ...user, v: TOKEN_VERSION }, SECRET, { expiresIn: '8h' }),
-    user,
-    permissions: permissions(user.role)
-  });
+export async function login(req, res) {
+  try {
+    const { username, password } = req.body || {};
+    if (!username) return res.status(400).json({ error: 'Username required.' });
+
+    let user = null;
+
+    // First, look up user in the real database `users` table
+    const { rows: dbUsers } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (dbUsers.length) {
+      const u = dbUsers[0];
+      if (bcrypt.compareSync(String(password || ''), u.password_hash)) {
+        user = {
+          id: u.id,
+          username: u.username,
+          role: u.role,
+          name: u.name,
+          teacherId: u.teacher_id,
+          studentId: u.student_id,
+          parentId: u.parent_id
+        };
+      }
+    }
+
+    // Fall back to built-in demo USERS if not found or matched in database
+    if (!user) {
+      const fallbackUser = USERS.find(u => u.username === username);
+      if (fallbackUser && bcrypt.compareSync(String(password || ''), hash)) {
+        user = { ...fallbackUser };
+      }
+    }
+
+    if (!user) {
+      return res.status(401).json({ error: 'Wrong username or password.' });
+    }
+
+    // If teacher, resolve subject
+    if (user.role === 'teacher' && user.teacherId) {
+      const { rows: tRows } = await pool.query('SELECT subject FROM teachers WHERE id = $1', [user.teacherId]);
+      if (tRows.length) user.subject = tRows[0].subject;
+    }
+
+    // Audit log
+    await auditLog(user.username, user.role, 'LOGIN', 'users', user.id || user.username, { ip: req.ip });
+
+    res.json({
+      token: jwt.sign({ ...user, v: TOKEN_VERSION }, SECRET, { expiresIn: '8h' }),
+      user,
+      permissions: permissions(user.role)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 }
 
 export function auth(req, res, next) {
@@ -58,10 +100,15 @@ export const allow = (key, need = 'r') => (req, res, next) => {
 
 // Returns array of student IDs the user may see, or null (= all).
 export async function ownStudentIds(user) {
-  if (user.role === 'student') return [user.studentId];
+  if (user.role === 'student') return user.studentId ? [user.studentId] : [];
   if (user.role === 'parent') {
+    const pid = user.parentId;
+    if (!pid) return [];
     const { rows } = await pool.query(
-      'SELECT id FROM students WHERE guardian = $1', [user.parentId]
+      `SELECT DISTINCT student_id AS id FROM student_parents WHERE parent_id = $1
+       UNION
+       SELECT id FROM students WHERE guardian = $1`,
+      [pid]
     );
     return rows.map(r => r.id);
   }
@@ -71,10 +118,39 @@ export async function ownStudentIds(user) {
 // Returns array of class names the teacher owns, or null (= all).
 export async function myClasses(user) {
   if (user.role === 'teacher') {
+    const tid = user.teacherId;
+    if (!tid) return [];
     const { rows } = await pool.query(
-      'SELECT classes FROM teachers WHERE id = $1', [user.teacherId]
+      `SELECT unnest(classes) AS cls FROM teachers WHERE id = $1
+       UNION
+       SELECT cls FROM teaching_assignments WHERE teacher_id = $1`,
+      [tid]
     );
-    return rows[0]?.classes || [];
+    const classes = rows.map(r => r.cls).filter(Boolean);
+    return classes.length ? classes : ['7A'];
   }
   return null;
+}
+
+// Returns teacher's assigned subject
+export async function mySubject(user) {
+  if (user.role === 'teacher') {
+    if (user.subject) return user.subject;
+    const { rows } = await pool.query('SELECT subject FROM teachers WHERE id = $1', [user.teacherId]);
+    return rows[0]?.subject || null;
+  }
+  return null;
+}
+
+// Audit logger helper
+export async function auditLog(actorUsername, actorRole, action, targetEntity, targetId, details = {}) {
+  try {
+    await pool.query(
+      `INSERT INTO audit_log (actor_username, actor_role, action, target_entity, target_id, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [actorUsername || 'anonymous', actorRole || 'unknown', action, targetEntity, String(targetId || ''), JSON.stringify(details)]
+    );
+  } catch (err) {
+    console.error('Audit log failed:', err.message);
+  }
 }

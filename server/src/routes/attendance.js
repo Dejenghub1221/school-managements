@@ -1,6 +1,6 @@
 import express from 'express';
 import { pool, CLS } from '../db/index.js';
-import { allow, ownStudentIds, myClasses } from '../API/auth.js';
+import { allow, ownStudentIds, myClasses, auditLog } from '../API/auth.js';
 import { attOf, rate } from '../utils/helpers.js';
 
 const router = express.Router();
@@ -22,7 +22,17 @@ router.get('/', allow('attendance'), async (req, res, next) => {
         [own]
       );
       const c = await attOf(own);
-      return res.json({ isFamily: true, stats: { ...c, rate: rate(c) }, history });
+
+      // Also get any absence reports made by parent/student
+      const { rows: absences } = await pool.query(
+        `SELECT ar.*, s.name AS "studentName"
+         FROM absence_reports ar JOIN students s ON s.id=ar.student_id
+         WHERE ar.student_id=ANY($1)
+         ORDER BY ar.date DESC LIMIT 10`,
+        [own]
+      );
+
+      return res.json({ isFamily: true, stats: { ...c, rate: rate(c) }, history, absences });
     }
 
     // Teacher: only their classes
@@ -54,7 +64,27 @@ router.get('/', allow('attendance'), async (req, res, next) => {
       rows.forEach(r => { records[r.student_id] = r.status; });
     }
 
-    res.json({ classes: classList, students, records, classSummary });
+    // Fetch reported absences from parents for this date & class (Cross-role flow: Absence)
+    let reportedAbsences = {};
+    if (date && students.length) {
+      const studentIds = students.map(s => s.id);
+      const { rows: absRows } = await pool.query(
+        `SELECT ar.student_id, ar.reason, ar.status, p.name AS "parentName", p.phone AS "parentPhone"
+         FROM absence_reports ar
+         JOIN parents p ON p.id = ar.parent_id
+         WHERE ar.date = $1 AND ar.student_id = ANY($2)`,
+        [date, studentIds]
+      );
+      absRows.forEach(a => {
+        reportedAbsences[a.student_id] = a;
+        // Pre-fill as 'E' (Excused) if not yet marked
+        if (!records[a.student_id]) {
+          records[a.student_id] = 'E';
+        }
+      });
+    }
+
+    res.json({ classes: classList, students, records, classSummary, reportedAbsences });
   } catch (err) { next(err); }
 });
 
@@ -80,8 +110,19 @@ router.put('/', allow('attendance', 'w'), async (req, res, next) => {
            ON CONFLICT (student_id, date) DO UPDATE SET status=EXCLUDED.status`,
           [id, date, st]
         );
+
+        // If marked Excused and there was an absence report, update it
+        if (st === 'E') {
+          await client.query(
+            `UPDATE absence_reports SET status='Excused' WHERE student_id=$1 AND date=$2`,
+            [id, date]
+          );
+        }
+
         saved++;
       }
+
+      await auditLog(req.user.username, req.user.role, 'SAVE_ATTENDANCE', 'attendance', date, { count: saved });
       await client.query('COMMIT');
     } catch (err) { await client.query('ROLLBACK'); throw err; }
     finally { client.release(); }

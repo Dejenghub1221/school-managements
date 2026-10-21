@@ -18,6 +18,7 @@ import timetableRouter   from './routes/timetable.js';
 import reportsRouter     from './routes/reports.js';
 import settingsRouter    from './routes/settings.js';
 import classesListRouter from './routes/classesList.js';
+import featuresRouter    from './routes/features.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -47,6 +48,7 @@ app.use('/api/timetable',    auth, timetableRouter);
 app.use('/api/reports',      auth, reportsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/classes-list', auth, classesListRouter);
+app.use('/api',              auth, featuresRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {

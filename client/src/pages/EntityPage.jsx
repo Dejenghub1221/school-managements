@@ -113,9 +113,13 @@ function RecordForm({ cfg, rels, init = {}, onSave, onCancel, submitLabel }) {
 
 export default function EntityPage({ k }) {
   const cfg = ENT[k];
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const { money } = useSettings();
   const write = can(k);
+  const isStudent = user?.role === 'student';
+  const isTeacher = user?.role === 'teacher';
+  const isAdmin = user?.role === 'admin';
+  const isParent = user?.role === 'parent';
 
   const [rows, setRows] = useState(null);
   const [rels, setRels] = useState({});
@@ -126,6 +130,12 @@ export default function EntityPage({ k }) {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
+
+  // Submissions state for assignments
+  const [submissionsModal, setSubmissionsModal] = useState(null);
+  const [submitModal, setSubmitModal] = useState(null);
+  const [gradeModal, setGradeModal] = useState(null);
+  const [reportCard, setReportCard] = useState(null);
 
   const load = useCallback(async () => {
     setErr('');
@@ -155,6 +165,61 @@ export default function EntityPage({ k }) {
     try {
       const p = await api(`/students/${studentId}/profile`);
       setSelectedProfile(p);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const openReportCard = async studentId => {
+    try {
+      const card = await api(`/students/${studentId}/report-card`);
+      setReportCard(card);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const openSubmissions = async assignment => {
+    try {
+      const data = await api(`/submissions?assignmentId=${assignment.id}`);
+      setSubmissionsModal({ assignment, list: data });
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const handleStudentSubmit = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      assignmentId: submitModal.id,
+      content: fd.get('content')?.toString(),
+      fileName: fd.get('fileName')?.toString()
+    };
+    try {
+      await api('/submissions', { method: 'POST', body });
+      setToast('Assignment submitted successfully.');
+      setSubmitModal(null);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const handleGradeSubmission = async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {
+      grade: Number(fd.get('grade')),
+      feedback: fd.get('feedback')?.toString()
+    };
+    try {
+      await api(`/submissions/${gradeModal.id}/grade`, { method: 'PUT', body });
+      setToast('Grade and feedback saved.');
+      setGradeModal(null);
+      // Reload submissions list
+      if (submissionsModal) {
+        openSubmissions(submissionsModal.assignment);
+      }
     } catch (x) {
       setToast(x.message);
     }
@@ -211,6 +276,7 @@ export default function EntityPage({ k }) {
           onBack={() => setSelectedProfile(null)}
           onEdit={student => setModal({ type: 'form', row: student })}
           onDelete={student => setModal({ type: 'del', row: student })}
+          onReportCard={student => openReportCard(student.id)}
           canWrite={write}
         />
         {modal?.type === 'form' && (
@@ -231,6 +297,40 @@ export default function EntityPage({ k }) {
             onCancel={() => setModal(null)}
             onConfirm={remove}
           />
+        )}
+        {reportCard && (
+          <Modal title="Student Report Card" onClose={() => setReportCard(null)}>
+            <div className="print-area" style={{ padding: 12 }}>
+              <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid var(--bd)', paddingBottom: 10 }}>
+                <h2 style={{ margin: 0 }}>{reportCard.school}</h2>
+                <div className="muted">Official Report Card · {reportCard.academicYear}</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 12 }}>
+                <div><strong>Student:</strong> {reportCard.student.name}</div>
+                <div><strong>ID:</strong> {reportCard.student.id}</div>
+                <div><strong>Class:</strong> {reportCard.student.cls}</div>
+                <div><strong>Attendance:</strong> {reportCard.attendance.rate}%</div>
+              </div>
+              <table className="rt" style={{ width: '100%', marginBottom: 14 }}>
+                <thead>
+                  <tr>
+                    <th>Subject</th><th>Mark</th><th>Grade</th><th>Teacher Comment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportCard.marks.map(m => (
+                    <tr key={m.subject}>
+                      <td>{m.subject}</td><td><b>{m.mark}</b>/100</td><td><Badge v={m.grade} /></td><td>{m.comment || 'Good progress.'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="acts">
+                <button type="button" className="btn pr" onClick={() => window.print()}>🖨 Print / Download</button>
+                <button type="button" className="btn" onClick={() => setReportCard(null)}>Close</button>
+              </div>
+            </div>
+          </Modal>
         )}
         <Toast msg={toast} onDone={() => setToast('')} />
       </>
@@ -303,6 +403,28 @@ export default function EntityPage({ k }) {
                     ))}
                     <td className="act" data-l="Actions">
                       <div className="act-group">
+                        {/* Assignment submissions & submission handlers (Page 3/4) */}
+                        {k === 'assignments' && isStudent && (
+                          <button
+                            type="button"
+                            className="btn sm pr"
+                            title="Submit assignment"
+                            onClick={() => setSubmitModal(r)}
+                          >
+                            📤 Submit
+                          </button>
+                        )}
+                        {k === 'assignments' && (isTeacher || isAdmin || isParent) && (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            title="View submissions"
+                            onClick={() => openSubmissions(r)}
+                          >
+                            📥 Submissions
+                          </button>
+                        )}
+
                         {cfg.hasProfile && (
                           <button
                             type="button"
@@ -369,6 +491,100 @@ export default function EntityPage({ k }) {
             </span>
           </div>
         </>
+      )}
+
+      {/* Student submit assignment modal */}
+      {submitModal && (
+        <Modal title={`Submit Assignment: ${submitModal.title}`} onClose={() => setSubmitModal(null)}>
+          <form onSubmit={handleStudentSubmit} noValidate>
+            <div className="fld">
+              <label htmlFor="sub_txt">Your response / solution *</label>
+              <textarea
+                id="sub_txt"
+                name="content"
+                rows={5}
+                placeholder="Type your submission content here..."
+                required
+              />
+            </div>
+            <div className="fld">
+              <label htmlFor="sub_file">Attachment / Document name (optional)</label>
+              <input id="sub_file" name="fileName" placeholder="e.g. homework_chapter4.pdf" />
+            </div>
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => setSubmitModal(null)}>Cancel</button>
+              <button className="btn pr">Turn in assignment</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Teacher / Admin view submissions modal */}
+      {submissionsModal && (
+        <Modal title={`Submissions for ${submissionsModal.assignment.title} (${submissionsModal.assignment.cls})`} onClose={() => setSubmissionsModal(null)}>
+          {!submissionsModal.list?.length ? (
+            <p className="muted" style={{ padding: '16px 0', textAlign: 'center' }}>No submissions yet for this assignment.</p>
+          ) : (
+            <div className="tw" style={{ maxHeight: 350, overflowY: 'auto' }}>
+              <table className="rt">
+                <thead>
+                  <tr>
+                    <th>Student</th><th>Submitted At</th><th>Grade</th><th>Feedback</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissionsModal.list.map(sub => (
+                    <tr key={sub.id}>
+                      <td data-l="Student"><strong>{sub.studentName}</strong></td>
+                      <td data-l="Submitted At">{new Date(sub.submitted_at).toLocaleDateString()}</td>
+                      <td data-l="Grade">{sub.grade !== null ? <b>{sub.grade}%</b> : <span className="muted">Ungraded</span>}</td>
+                      <td data-l="Feedback">{sub.feedback || '—'}</td>
+                      <td data-l="Action">
+                        {(isTeacher || isAdmin) && (
+                          <button
+                            type="button"
+                            className="btn sm pr"
+                            onClick={() => setGradeModal(sub)}
+                          >
+                            {sub.grade !== null ? 'Regrade' : 'Grade'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="acts" style={{ marginTop: 14 }}>
+            <button type="button" className="btn" onClick={() => setSubmissionsModal(null)}>Close</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Grade submission modal */}
+      {gradeModal && (
+        <Modal title={`Grade submission for ${gradeModal.studentName}`} onClose={() => setGradeModal(null)}>
+          <form onSubmit={handleGradeSubmission} noValidate>
+            <div className="card" style={{ marginBottom: 12, background: 'var(--bg-card)' }}>
+              <strong>Submission Content:</strong>
+              <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{gradeModal.content || 'No text submitted.'}</p>
+              {gradeModal.file_name && <small className="muted">Attached: {gradeModal.file_name}</small>}
+            </div>
+            <div className="fld">
+              <label htmlFor="g_val">Grade (0–100) *</label>
+              <input id="g_val" name="grade" type="number" min="0" max="100" defaultValue={gradeModal.grade ?? ''} required />
+            </div>
+            <div className="fld">
+              <label htmlFor="g_fb">Feedback for student</label>
+              <textarea id="g_fb" name="feedback" rows={3} defaultValue={gradeModal.feedback || ''} placeholder="Add helpful comments..." />
+            </div>
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => setGradeModal(null)}>Cancel</button>
+              <button className="btn pr">Save grade</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {modal?.type === 'view' && (

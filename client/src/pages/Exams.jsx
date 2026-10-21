@@ -5,8 +5,12 @@ import { SUB } from '../config/entities.js';
 import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, CsvModal, Icon } from '../components/index.js';
 
 export default function Exams() {
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const write = can('exams');
+  const isAdmin = user?.role === 'admin';
+  const isTeacher = user?.role === 'teacher';
+  const isFamily = user?.role === 'student' || user?.role === 'parent';
+
   const [tab, setTab] = useState('exams'); // 'exams' | 'results'
 
   // Exams tab state
@@ -19,6 +23,8 @@ export default function Exams() {
   const [resData, setResData] = useState(null);
   const [resCls, setResCls] = useState('7A');
   const [csvText, setCsvText] = useState(null);
+  const [reportCardData, setReportCardData] = useState(null);
+  const [commentModal, setCommentModal] = useState(null);
 
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
@@ -73,9 +79,56 @@ export default function Exams() {
       await api('/results', { method: 'PUT', body: { studentId, subject, mark: num } });
     } catch (x) {
       setToast(x.message);
+      loadResults(resCls);
     }
   };
 
+  const saveComment = async (studentId, subject, comment) => {
+    try {
+      await api('/results', {
+        method: 'PUT',
+        body: { studentId, subject, comment }
+      });
+      setToast('Comment saved.');
+      setCommentModal(null);
+      loadResults(resCls);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const toggleLockResults = async () => {
+    try {
+      const next = !resData?.isLocked;
+      await api('/results/lock', { method: 'POST', body: { locked: next } });
+      setToast(next ? 'Results locked.' : 'Results unlocked.');
+      loadResults(resCls);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const togglePublishResults = async () => {
+    try {
+      const next = !resData?.isPublished;
+      await api('/results/lock', { method: 'POST', body: { published: next } });
+      setToast(next ? 'Results published to students and parents.' : 'Results unpublished.');
+      loadResults(resCls);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  const openReportCard = async studentId => {
+    try {
+      const card = await api(`/students/${studentId}/report-card`);
+      setReportCardData(card);
+    } catch (x) {
+      setToast(x.message);
+    }
+  };
+
+  // Problem 2 Fix: Export CSV strictly exports only authorized students (self/children for family)
   const exportResultsCsv = () => {
     if (!resData || !resData.students) return;
     const headers = ['Student', ...SUB, 'Total', 'Average', 'Grade'];
@@ -142,7 +195,7 @@ export default function Exams() {
 
   const filteredExams = (exams || []).filter(e =>
     (!examFlt || e.status === examFlt) &&
-    (e.name.toLowerCase().includes(examQ.toLowerCase()) || e.cls.toLowerCase().includes(examQ.toLowerCase()))
+    (e.name.toLowerCase().includes(examQ.toLowerCase()) || (e.cls && e.cls.toLowerCase().includes(examQ.toLowerCase())))
   );
 
   return (
@@ -263,15 +316,30 @@ export default function Exams() {
       {tab === 'results' && (
         <>
           <div className="head">
-            <h1>Results</h1>
-            <span>
-              <button className="btn" onClick={exportResultsCsv}>Export CSV</button>{' '}
-              <button className="btn" onClick={handlePrint}>Print</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h1>Results</h1>
+              {resData?.isLocked && <Badge v="Suspended" /> /* tone 'r' */}
+              {resData?.isLocked && <small style={{ color: 'var(--mu)' }}>Locked by Admin</small>}
+              {resData?.isPublished && <Badge v="Active" /> /* tone 'g' */}
+            </div>
+            <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {isAdmin && (
+                <>
+                  <button className="btn sm" onClick={toggleLockResults}>
+                    {resData?.isLocked ? '🔓 Unlock Marks' : '🔒 Lock Marks'}
+                  </button>
+                  <button className="btn sm" onClick={togglePublishResults}>
+                    {resData?.isPublished ? '📢 Unpublish' : '📢 Publish Results'}
+                  </button>
+                </>
+              )}
+              <button className="btn sm" onClick={exportResultsCsv}>Export CSV</button>
+              <button className="btn sm" onClick={handlePrint}>Print</button>
             </span>
           </div>
 
           <div className="tb">
-            {resData?.classes && (
+            {resData?.classes && resData.classes.length > 1 && (
               <label>
                 Class{' '}
                 <select
@@ -285,6 +353,11 @@ export default function Exams() {
                 </select>
               </label>
             )}
+            {isTeacher && resData?.teacherSubject && (
+              <span className="bd g" style={{ alignSelf: 'center' }}>
+                Your subject: {resData.teacherSubject}
+              </span>
+            )}
             <span className="muted" style={{ alignSelf: 'center' }}>
               Marks out of 100. Grades: A 80+, B 70+, C 60+, D 50+, F below 50.
             </span>
@@ -293,7 +366,7 @@ export default function Exams() {
           {!resData ? (
             <Skeleton />
           ) : !resData.students?.length ? (
-            <Empty title="No students in this class" text="Add students to this class first." />
+            <Empty title="No students found" text="No student records match this filter." />
           ) : (
             <div className="tw">
               <table className="rt">
@@ -304,29 +377,62 @@ export default function Exams() {
                     <th scope="col">Total</th>
                     <th scope="col">Average</th>
                     <th scope="col">Grade</th>
+                    <th scope="col">Report card</th>
                   </tr>
                 </thead>
                 <tbody>
                   {resData.students.map(s => (
                     <tr key={s.id}>
-                      <td data-l="Student">{s.name}</td>
-                      {SUB.map(sb => (
-                        <td key={sb} data-l={sb}>
-                          <input
-                            className="num"
-                            type="number"
-                            min="0"
-                            max="100"
-                            aria-label={`${s.name} ${sb}`}
-                            value={s.marks[sb] ?? 0}
-                            readOnly={!write}
-                            onChange={e => updateMark(s.id, sb, e.target.value)}
-                          />
-                        </td>
-                      ))}
+                      <td data-l="Student">
+                        <div>
+                          <strong>{s.name}</strong>
+                          <div style={{ fontSize: 11, color: 'var(--mu)' }}>Class {s.cls}</div>
+                        </div>
+                      </td>
+                      {SUB.map(sb => {
+                        // Problem 4: Teacher can only write to their own subject!
+                        const canEditSubject = write && !resData.isLocked && (isAdmin || (isTeacher && resData.teacherSubject === sb));
+                        return (
+                          <td key={sb} data-l={sb}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input
+                                className="num"
+                                type="number"
+                                min="0"
+                                max="100"
+                                aria-label={`${s.name} ${sb}`}
+                                value={s.marks[sb] ?? 0}
+                                readOnly={!canEditSubject}
+                                onChange={e => updateMark(s.id, sb, e.target.value)}
+                                style={!canEditSubject ? { opacity: 0.85, background: 'transparent' } : {}}
+                              />
+                              {isTeacher && resData.teacherSubject === sb && (
+                                <button
+                                  type="button"
+                                  className="btn sm icon-btn"
+                                  title="Add comment"
+                                  style={{ padding: 2, height: 24, width: 24 }}
+                                  onClick={() => setCommentModal({ studentId: s.id, studentName: s.name, subject: sb, comment: s.comments?.[sb] || '' })}
+                                >
+                                  💬
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
                       <td data-l="Total"><b>{s.total}</b></td>
                       <td data-l="Average">{s.average}</td>
                       <td data-l="Grade"><Badge v={s.grade} /></td>
+                      <td data-l="Report card">
+                        <button
+                          type="button"
+                          className="btn sm"
+                          onClick={() => openReportCard(s.id)}
+                        >
+                          📄 View
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -346,9 +452,9 @@ export default function Exams() {
             </div>
             <div className="fld">
               <label htmlFor="ex_cls">Class *</label>
-              <select id="ex_cls" name="cls" defaultValue={examModal.row?.cls || 'All'}>
-                <option value="All">All</option>
-                {['7A', '7B', '8A', '8B', '9A', '9B'].map(c => <option key={c} value={c}>{c}</option>)}
+              <select id="ex_cls" name="cls" defaultValue={examModal.row?.cls || (resData?.classes?.[0] || '7A')}>
+                {isAdmin && <option value="All">All</option>}
+                {(resData?.classes || ['7A', '7B', '8A', '8B', '9A', '9B']).map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div className="fld">
@@ -376,6 +482,79 @@ export default function Exams() {
           onCancel={() => setExamModal(null)}
           onConfirm={deleteExam}
         />
+      )}
+
+      {/* Report Card Modal */}
+      {reportCardData && (
+        <Modal title="Student Report Card" onClose={() => setReportCardData(null)}>
+          <div className="print-area" style={{ padding: 12 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid var(--bd)', paddingBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>{reportCardData.school}</h2>
+              <div className="muted">Official Academic Report Card · Academic Year {reportCardData.academicYear}</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <div><strong>Student:</strong> {reportCardData.student.name}</div>
+              <div><strong>ID:</strong> {reportCardData.student.id}</div>
+              <div><strong>Class:</strong> {reportCardData.student.cls}</div>
+              <div><strong>Attendance:</strong> {reportCardData.attendance.rate}%</div>
+            </div>
+
+            <table className="rt" style={{ width: '100%', marginBottom: 16 }}>
+              <thead>
+                <tr>
+                  <th scope="col">Subject</th>
+                  <th scope="col">Mark</th>
+                  <th scope="col">Grade</th>
+                  <th scope="col">Teacher Comment</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportCardData.marks.map(m => (
+                  <tr key={m.subject}>
+                    <td>{m.subject}</td>
+                    <td><b>{m.mark}</b> / 100</td>
+                    <td><Badge v={m.grade} /></td>
+                    <td>{m.comment || 'Satisfactory progress.'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: 12, background: 'var(--bg-card)', borderRadius: 'var(--rd)' }}>
+              <div><b>Total Marks:</b> {reportCardData.total}</div>
+              <div><b>Average:</b> {reportCardData.average}%</div>
+              <div><b>Final Grade:</b> <Badge v={reportCardData.finalGrade} /></div>
+            </div>
+
+            <div className="acts" style={{ marginTop: 20 }}>
+              <button type="button" className="btn pr" onClick={handlePrint}>🖨 Print / Download</button>
+              <button type="button" className="btn" onClick={() => setReportCardData(null)}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Teacher Comment Modal */}
+      {commentModal && (
+        <Modal title={`Report-card Comment for ${commentModal.studentName} (${commentModal.subject})`} onClose={() => setCommentModal(null)}>
+          <form onSubmit={e => { e.preventDefault(); saveComment(commentModal.studentId, commentModal.subject, e.target.comment.value); }}>
+            <div className="fld">
+              <label htmlFor="c_txt">Teacher comment</label>
+              <textarea
+                id="c_txt"
+                name="comment"
+                defaultValue={commentModal.comment}
+                placeholder="Enter teacher comments on student performance..."
+                rows={4}
+                required
+              />
+            </div>
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => setCommentModal(null)}>Cancel</button>
+              <button className="btn pr">Save comment</button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {csvText && (
