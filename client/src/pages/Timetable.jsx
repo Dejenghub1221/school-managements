@@ -65,7 +65,15 @@ export default function Timetable() {
                       <>
                         <b>{cell.subject}</b>
                         <br />
-                        <small className="muted">{cell.teacher}</small>
+                        <small className="muted" style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                          <span>{cell.teacher ? cell.teacher.replace(' (Cover)', '').replace(' (On leave)', '') : '—'}</span>
+                          {cell.teacher && cell.teacher.includes('(Cover)') && (
+                            <span className="bd ok" style={{ fontSize: '10px', padding: '1px 5px' }}>Cover</span>
+                          )}
+                          {cell.teacher && cell.teacher.includes('(On leave)') && (
+                            <span className="bd wa" style={{ fontSize: '10px', padding: '1px 5px' }}>On leave</span>
+                          )}
+                        </small>
                       </>
                     )}
                   </td>
