@@ -134,9 +134,11 @@ async function visible(k, row, user) {
     if (user.role === 'student') return false;
     if (user.role === 'parent') return row.id === user.parentId;
     if (user.role === 'teacher') {
-      // Can view parents whose children are in the teacher's classes
+      // Can view parents whose children are in the teacher's classes (via guardian or student_parents)
       const { rows } = await pool.query(
-        'SELECT 1 FROM students WHERE guardian=$1 AND cls=ANY($2) LIMIT 1',
+        `SELECT 1 FROM students s
+         LEFT JOIN student_parents sp ON sp.student_id = s.id
+         WHERE (s.guardian = $1 OR sp.parent_id = $1) AND s.cls = ANY($2) LIMIT 1`,
         [row.id, mine || []]
       );
       return rows.length > 0;

@@ -9,19 +9,33 @@ export function Notifications() {
   const ref = useRef();
 
   useEffect(() => {
-    // Load upcoming exams + unpaid fees as notifications
+    // Load upcoming exams, unpaid fees, announcements, trip consents, and leave requests
     Promise.all([
       api('/exams').catch(() => []),
-      api('/fees').catch(() => [])
-    ]).then(([exams, fees]) => {
+      api('/fees').catch(() => []),
+      api('/announcements').catch(() => []),
+      api('/trip-consents').catch(() => []),
+      api('/leave-requests').catch(() => [])
+    ]).then(([exams, fees, announcements, consents, leaves]) => {
       const notes = [];
+      (announcements || [])
+        .slice(0, 3)
+        .forEach(a => notes.push({ id: 'a-' + a.id, type: 'announcement', text: a.title, sub: a.author_name || a.target_role || 'Announcement' }));
+      (consents || [])
+        .filter(c => c.status === 'Pending')
+        .slice(0, 3)
+        .forEach(c => notes.push({ id: 'c-' + c.id, type: 'trip', text: `Consent required: ${c.trip_name}`, sub: `Due: ${c.trip_date || 'Upcoming'}` }));
+      (leaves || [])
+        .filter(l => l.status === 'Pending')
+        .slice(0, 3)
+        .forEach(l => notes.push({ id: 'l-' + l.id, type: 'leave', text: `Leave request: ${l.teacher_name || 'Teacher'}`, sub: `${l.start_date} to ${l.end_date}` }));
       (exams || [])
         .filter(e => e.status === 'Scheduled')
-        .slice(0, 5)
+        .slice(0, 3)
         .forEach(e => notes.push({ id: 'e-' + e.id, type: 'exam', text: `${t('upcomingExam')}: ${e.name}`, sub: e.date }));
       (fees || [])
         .filter(f => f.status !== 'Paid')
-        .slice(0, 5)
+        .slice(0, 3)
         .forEach(f => notes.push({ id: 'f-' + f.id, type: 'fee', text: `${t('unpaidFees')}: ${f.student}`, sub: f.status }));
       setItems(notes);
     });

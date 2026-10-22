@@ -39,6 +39,13 @@ const ROLES = {
   parent: 'Parent'
 };
 
+const NAV_BY_ROLE = {
+  admin: ['dashboard', 'students', 'teachers', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'fees', 'parents', 'timetable', 'library', 'reports', 'settings'],
+  teacher: ['dashboard', 'students', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'timetable', 'library', 'reports'],
+  student: ['dashboard', 'exams', 'assignments', 'timetable', 'library', 'fees', 'attendance'],
+  parent:  ['dashboard', 'exams', 'assignments', 'timetable', 'fees', 'attendance']
+};
+
 function Guard({ k, children }) {
   const { see } = useAuth();
   return see(k) ? children : <Navigate to="/" replace />;
@@ -161,7 +168,7 @@ function Layout() {
         </div>
         <div id="who" className="who">{whoText}</div>
         <nav id="nav" aria-label="Main navigation">
-          {NAV.filter(n => see(n[0])).map(([k, , to]) => (
+          {NAV.filter(n => (NAV_BY_ROLE[user?.role] || NAV.map(x => x[0])).includes(n[0]) && see(n[0])).map(([k, , to]) => (
             <NavLink
               key={k}
               to={to}
