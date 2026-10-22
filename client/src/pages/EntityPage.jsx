@@ -145,7 +145,11 @@ export default function EntityPage({ k }) {
       setRows(data);
       const r = {};
       for (const x of cfg.rels || []) {
-        r[x] = await api('/' + x);
+        try {
+          r[x] = await api('/' + x);
+        } catch {
+          r[x] = [];
+        }
       }
       setRels(r);
     } catch (x) {
