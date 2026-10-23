@@ -37,6 +37,17 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
 // ── API routes ────────────────────────────────────────────────────────────
+app.get(['/api', '/api/health'], (req, res) => {
+  if (req.accepts('html') && !req.xhr && !req.headers.authorization) {
+    return res.redirect('/');
+  }
+  res.json({
+    status: 'online',
+    name: 'School Management API',
+    version: '1.0.0',
+    appUrl: '/'
+  });
+});
 app.post('/api/login', login);
 setupCrud(app);
 app.use('/api/students',     auth, studentsRouter);
