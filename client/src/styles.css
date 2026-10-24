@@ -270,12 +270,48 @@ h3 { font-size: 1rem; }
   border-bottom: 1px solid var(--bd);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 10px 16px;
 }
 
+.top-menu-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  color: var(--tx);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.top-menu-btn:hover {
+  background: var(--hv);
+  color: var(--ac);
+}
+
+.top-menu-btn:focus-visible {
+  outline: 2px solid var(--ch);
+  outline-offset: 2px;
+}
+
+.top-menu-btn .menu-icon {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  display: block;
+}
+
 .top strong#pt {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--tx);
 }
 
 .top #ay {
@@ -322,8 +358,8 @@ main {
     padding: 10px 0;
     gap: 0;
   }
-  #side.collapsed button.side-toggle {
-    right: -18px;
+  #side button.side-toggle {
+    display: none !important;
   }
   #ov {
     display: none;
@@ -335,9 +371,6 @@ main {
   .wrap.collapsed {
     margin-left: 68px;
   }
-  #mb {
-    display: none !important;
-  }
   main {
     padding: 28px 32px 48px;
   }
@@ -345,7 +378,7 @@ main {
 
 @media (max-width: 1023px) {
   #side button.side-toggle {
-    display: none;
+    display: none !important;
   }
 }
 

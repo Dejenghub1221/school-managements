@@ -161,9 +161,7 @@ function Layout() {
               }
             }}
           >
-            <svg viewBox="0 0 24 24" className="side-toggle-ic" aria-hidden="true">
-              <polyline points={collapsed ? '9 6 15 12 9 18' : '15 6 9 12 15 18'} />
-            </svg>
+            <Icon name="menu" className="side-toggle-ic" />
           </button>
         </div>
         <div id="who" className="who">{whoText}</div>
@@ -191,14 +189,22 @@ function Layout() {
       <div className={`wrap ${collapsed ? 'collapsed' : ''}`.trim()}>
         <header className="top" role="banner">
           <button
-            className="btn"
+            type="button"
+            className="top-menu-btn"
             id="mb"
             aria-controls="side"
-            aria-expanded={open}
-            aria-label={open ? t('close') : t('menu')}
-            onClick={() => setOpen(!open)}
+            aria-expanded={window.innerWidth < 1024 ? open : !collapsed}
+            aria-label="Toggle navigation menu"
+            title="Toggle navigation menu"
+            onClick={() => {
+              if (window.innerWidth < 1024) {
+                setOpen(o => !o);
+              } else {
+                toggleCollapsed();
+              }
+            }}
           >
-            {open ? t('close') : t('menu')}
+            <Icon name="menu" className="menu-icon" />
           </button>
           <strong id="pt">{t(activeKey)}</strong>
           {isReadOnly && <span className="bd y" id="vo">{t('viewOnly')}</span>}
