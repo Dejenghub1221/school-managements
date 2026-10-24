@@ -56,7 +56,7 @@ router.post('/submissions', async (req, res, next) => {
     if (req.user.role !== 'student' && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only students can submit assignments.' });
     }
-    const { assignmentId, content, fileName } = req.body || {};
+    const { assignmentId, content, fileName, fileData } = req.body || {};
     const studentId = req.user.studentId || req.body.studentId;
     if (!assignmentId || !studentId) {
       return res.status(400).json({ error: 'assignmentId and studentId are required.' });
@@ -64,18 +64,19 @@ router.post('/submissions', async (req, res, next) => {
 
     const subId = `SUB_${Date.now().toString().slice(-6)}`;
     const { rows } = await pool.query(
-      `INSERT INTO submissions (id, assignment_id, student_id, content, file_name, submitted_at, status)
-       VALUES ($1, $2, $3, $4, $5, NOW(), 'Submitted')
+      `INSERT INTO submissions (id, assignment_id, student_id, content, file_name, file_data, submitted_at, status)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), 'Submitted')
        ON CONFLICT (assignment_id, student_id) DO UPDATE SET
          content = EXCLUDED.content,
          file_name = EXCLUDED.file_name,
+         file_data = EXCLUDED.file_data,
          submitted_at = NOW(),
          status = 'Submitted'
        RETURNING *`,
-      [subId, assignmentId, studentId, content || '', fileName || '']
+      [subId, assignmentId, studentId, content || '', fileName || '', fileData || null]
     );
 
-    await auditLog(req.user.username, req.user.role, 'SUBMIT_ASSIGNMENT', 'submissions', subId, { assignmentId, studentId });
+    await auditLog(req.user.username, req.user.role, 'SUBMIT_ASSIGNMENT', 'submissions', subId, { assignmentId, studentId, fileName });
     res.status(201).json(rows[0]);
   } catch (err) { next(err); }
 });

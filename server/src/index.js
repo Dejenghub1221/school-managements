@@ -34,7 +34,8 @@ const DIST = DIST_CANDIDATES.find(p => existsSync(p));
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Browser direct navigation helper:
 // If a user navigates to /api or /api/students in their browser URL bar (text/html without auth),

@@ -55,12 +55,14 @@ async function migrate() {
         student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
         content TEXT,
         file_name TEXT,
+        file_data TEXT,
         submitted_at TIMESTAMPTZ DEFAULT NOW(),
         grade NUMERIC(5,2),
         feedback TEXT,
         status TEXT DEFAULT 'Submitted' CHECK (status IN ('Submitted', 'Graded', 'Returned')),
         UNIQUE(assignment_id, student_id)
       );
+      ALTER TABLE submissions ADD COLUMN IF NOT EXISTS file_data TEXT;
     `);
 
     // 5. absence_reports table
