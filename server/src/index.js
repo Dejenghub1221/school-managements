@@ -36,11 +36,22 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// ── API routes ────────────────────────────────────────────────────────────
-app.get(['/api', '/api/health'], (req, res) => {
-  if (req.accepts('html') && !req.xhr && !req.headers.authorization) {
-    return res.redirect('/');
+// Browser direct navigation helper:
+// If a user navigates to /api or /api/students in their browser URL bar (text/html without auth),
+// seamlessly redirect them to the corresponding frontend UI page.
+app.use('/api', (req, res, next) => {
+  const isBrowserNav = req.method === 'GET'
+    && (req.headers.accept || '').includes('text/html')
+    && !req.headers.authorization
+    && !req.xhr;
+  if (isBrowserNav) {
+    const uiPath = req.path === '/' || req.path === '' ? '/' : req.path;
+    return res.redirect(uiPath);
   }
+  next();
+});
+
+app.get(['/api', '/api/health'], (req, res) => {
   res.json({
     status: 'online',
     name: 'School Management API',
