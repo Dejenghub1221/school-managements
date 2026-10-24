@@ -3,8 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import { useAuth } from './context/AuthContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useLang } from './context/LangContext.jsx';
-import { Icon } from './icons.jsx';
-import { Notifications } from './components/index.js';
+import { Notifications, UserProfileMenu } from './components/index.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import EntityPage from './pages/EntityPage.jsx';
@@ -114,8 +113,8 @@ function Layout() {
     return () => document.body.classList.remove('ro');
   }, [isReadOnly]);
 
-  const handleRoleChange = async e => {
-    const newRole = e.target.value;
+  const handleRoleChange = async target => {
+    const newRole = typeof target === 'string' ? target : target?.target?.value;
     try {
       await switchRole(newRole);
       navigate('/');
@@ -224,29 +223,10 @@ function Layout() {
             {isDark ? '☀️' : '🌙'}
           </button>
 
-          {/* Notification bell */}
-          <Notifications />
-
-          <select
-            id="role"
-            aria-label="View as role (demo)"
-            value={user.role}
-            onChange={handleRoleChange}
-          >
-            {Object.entries(ROLES).map(([k, label]) => (
-              <option key={k} value={k}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <button className="btn sm signout-btn" onClick={logout} title={t('signOut')} aria-label={t('signOut')}>
-            <svg viewBox="0 0 24 24" className="ic" aria-hidden="true" style={{width:16,height:16}}>
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            {t('signOut')}
-          </button>
+          {/* User profile menu with session timeout, notifications, and profile popover */}
+          <UserProfileMenu onRoleChange={handleRoleChange} roles={ROLES}>
+            <Notifications />
+          </UserProfileMenu>
         </header>
 
         <main id="main" tabIndex="-1">

@@ -1268,6 +1268,381 @@ body.ro [data-a=add], body.ro [data-a=edit], body.ro [data-a=del], body.ro [data
 .notif-trip .notif-text::before { content: '🚌 '; }
 .notif-leave .notif-text::before { content: '🏖️ '; }
 
+/* ── User Profile Menu & Dropdown (Matching Screenshot) ────────── */
+.user-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-timeout-pill {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  background: var(--sf);
+  color: var(--tx);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.session-timeout-pill:hover {
+  background: var(--hv);
+  border-color: var(--ac);
+}
+.session-timeout-pill:focus-visible {
+  outline: 2px solid var(--ch);
+}
+
+.user-profile-trigger {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 12px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  background: var(--sf);
+  color: var(--tx);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.user-profile-trigger:hover,
+.user-profile-trigger.active {
+  background: var(--hv);
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.12);
+}
+.user-profile-trigger:focus-visible {
+  outline: 2px solid var(--ch);
+  outline-offset: 1px;
+}
+
+.user-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.user-avatar-circle.lg {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+
+.user-trigger-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.user-trigger-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx);
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-trigger-role {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--mu);
+  text-transform: capitalize;
+}
+
+.user-trigger-chevron {
+  color: var(--mu);
+  display: grid;
+  place-items: center;
+  margin-left: 2px;
+}
+
+/* Dropdown popover */
+.user-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 290px;
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: 16px;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.16), 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 14px 16px;
+  z-index: 100;
+  animation: userDropdownIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes userDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.user-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bd);
+}
+
+.user-card-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tx);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-email {
+  font-size: 12px;
+  color: var(--mu);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-role-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.user-card-role-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--mu);
+  text-transform: uppercase;
+}
+
+.user-card-role-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .user-card-role-badge {
+  background: #3b2e10;
+  color: #f2b134;
+  border-color: #78350f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .user-card-role-badge {
+    background: #3b2e10;
+    color: #f2b134;
+    border-color: #78350f;
+  }
+}
+
+.user-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bd);
+}
+
+.user-menu-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--tx);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.user-menu-item:hover {
+  background: var(--hv);
+  color: #2563eb;
+}
+
+.user-menu-item:focus-visible {
+  outline: 2px solid var(--ch);
+}
+
+.user-menu-item-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--mu);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.user-menu-item:hover .user-menu-item-icon {
+  color: #2563eb;
+}
+
+/* Timeout section */
+.session-timeout-card {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+}
+
+:root[data-theme="dark"] .session-timeout-card {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .session-timeout-card {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.session-timeout-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-timeout-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tx);
+}
+
+.session-timeout-card-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .session-timeout-card-badge {
+  background: #1e3a8a;
+  color: #93c5fd;
+  border-color: #1e40af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .session-timeout-card-badge {
+    background: #1e3a8a;
+    color: #93c5fd;
+    border-color: #1e40af;
+  }
+}
+
+.session-timeout-card-desc {
+  font-size: 11px;
+  color: var(--mu);
+  margin: 6px 0 8px;
+  line-height: 1.35;
+}
+
+.session-timeout-select {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--bd);
+  background: var(--sf);
+  color: var(--tx);
+  cursor: pointer;
+  outline: none;
+}
+.session-timeout-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* Sign out button */
+.user-signout-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 10px 10px;
+  margin-top: 10px;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.user-signout-btn:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+:root[data-theme="dark"] .user-signout-btn:hover {
+  background: #3d1d19;
+  color: #ff8a7a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .user-signout-btn:hover {
+    background: #3d1d19;
+    color: #ff8a7a;
+  }
+}
+
+.user-signout-btn:focus-visible {
+  outline: 2px solid #dc2626;
+}
+
 /* ── Print styles ──────────────────────────────────────────────────────── */
 .print-header {
   display: none;
@@ -1278,7 +1653,7 @@ body.ro [data-a=add], body.ro [data-a=edit], body.ro [data-a=del], body.ro [data
 
 @media print {
   #side, .top, .btn, .tb, #ov, .tabs, .app-footer,
-  .notif-wrap, .signout-btn, #role, #mb, #ay, #pt, #vo {
+  .notif-wrap, .user-menu-wrap, .signout-btn, #role, #mb, #ay, #pt, #vo {
     display: none !important;
   }
   .wrap { margin: 0 !important; }
