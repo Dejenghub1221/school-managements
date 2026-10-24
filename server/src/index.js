@@ -34,9 +34,32 @@ const DIST = DIST_CANDIDATES.find(p => existsSync(p));
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// ── API routes ────────────────────────────────────────────────────────────
+// Browser direct navigation helper:
+// If a user navigates to /api or /api/students in their browser URL bar (text/html without auth),
+// seamlessly redirect them to the corresponding frontend UI page.
+app.use('/api', (req, res, next) => {
+  const isBrowserNav = req.method === 'GET'
+    && (req.headers.accept || '').includes('text/html')
+    && !req.headers.authorization
+    && !req.xhr;
+  if (isBrowserNav) {
+    const uiPath = req.path === '/' || req.path === '' ? '/' : req.path;
+    return res.redirect(uiPath);
+  }
+  next();
+});
+
+app.get(['/api', '/api/health'], (req, res) => {
+  res.json({
+    status: 'online',
+    name: 'School Management API',
+    version: '1.0.0',
+    appUrl: '/'
+  });
+});
 app.post('/api/login', login);
 setupCrud(app);
 app.use('/api/students',     auth, studentsRouter);
@@ -52,8 +75,21 @@ app.use('/api',              auth, featuresRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {
-  app.use(express.static(DIST));
-  app.get('*', (req, res) => res.sendFile(join(DIST, 'index.html')));
+  app.use(express.static(DIST, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    }
+  }));
+  app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(join(DIST, 'index.html'));
+  });
   console.log('📦  Serving frontend from', DIST);
 } else {
   console.warn('⚠️   client/dist not found — API-only mode. Run npm run build first.');

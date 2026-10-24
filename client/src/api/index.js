@@ -1,6 +1,7 @@
 // Same origin in production — Express serves both the API and the frontend.
 // In dev, Vite proxy forwards /api → localhost:4000 (set in vite.config.js).
-const BASE = import.meta.env.VITE_API_URL || '';
+const rawUrl = import.meta.env.VITE_API_URL;
+const BASE = (rawUrl && !rawUrl.includes('your-backend-url') && !rawUrl.includes('example.com')) ? rawUrl : '';
 
 export async function api(path, { method = 'GET', body } = {}) {
   const token = localStorage.getItem('token');

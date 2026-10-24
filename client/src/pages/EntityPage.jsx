@@ -134,6 +134,8 @@ export default function EntityPage({ k }) {
   // Submissions state for assignments
   const [submissionsModal, setSubmissionsModal] = useState(null);
   const [submitModal, setSubmitModal] = useState(null);
+  const [subFile, setSubFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [gradeModal, setGradeModal] = useState(null);
   const [reportCard, setReportCard] = useState(null);
 
@@ -195,17 +197,46 @@ export default function EntityPage({ k }) {
   const handleStudentSubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const body = {
-      assignmentId: submitModal.id,
-      content: fd.get('content')?.toString(),
-      fileName: fd.get('fileName')?.toString()
-    };
+    const content = fd.get('content')?.toString()?.trim();
+    const customFileName = fd.get('fileName')?.toString()?.trim();
+
+    if (!content && !subFile) {
+      setToast('Please provide your response text or attach a file.');
+      return;
+    }
+
+    setSubmitting(true);
     try {
+      let fileData = null;
+      let fileName = customFileName || (subFile ? subFile.name : '');
+
+      if (subFile) {
+        if (subFile.size > 12 * 1024 * 1024) {
+          throw new Error('File exceeds the 12MB size limit.');
+        }
+        fileData = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error('Failed to read file.'));
+          reader.readAsDataURL(subFile);
+        });
+      }
+
+      const body = {
+        assignmentId: submitModal.id,
+        content: content || (fileName ? `Submitted file: ${fileName}` : ''),
+        fileName,
+        fileData
+      };
+
       await api('/submissions', { method: 'POST', body });
       setToast('Assignment submitted successfully.');
       setSubmitModal(null);
+      setSubFile(null);
     } catch (x) {
       setToast(x.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -413,19 +444,19 @@ export default function EntityPage({ k }) {
                             type="button"
                             className="btn sm pr"
                             title="Submit assignment"
-                            onClick={() => setSubmitModal(r)}
+                            onClick={() => { setSubmitModal(r); setSubFile(null); }}
                           >
                             📤 Submit
                           </button>
                         )}
-                        {k === 'assignments' && (isTeacher || isAdmin || isParent) && (
+                        {k === 'assignments' && (
                           <button
                             type="button"
                             className="btn sm"
-                            title="View submissions"
+                            title={isStudent ? 'View my submission' : 'View submissions'}
                             onClick={() => openSubmissions(r)}
                           >
-                            📥 Submissions
+                            {isStudent ? '📋 My Submission' : '📥 Submissions'}
                           </button>
                         )}
 
@@ -499,25 +530,96 @@ export default function EntityPage({ k }) {
 
       {/* Student submit assignment modal */}
       {submitModal && (
-        <Modal title={`Submit Assignment: ${submitModal.title}`} onClose={() => setSubmitModal(null)}>
+        <Modal title={`Submit Assignment: ${submitModal.title}`} onClose={() => { setSubmitModal(null); setSubFile(null); }}>
           <form onSubmit={handleStudentSubmit} noValidate>
             <div className="fld">
-              <label htmlFor="sub_txt">Your response / solution *</label>
+              <label htmlFor="sub_txt">Your response / solution</label>
               <textarea
                 id="sub_txt"
                 name="content"
                 rows={5}
                 placeholder="Type your submission content here..."
-                required
               />
             </div>
             <div className="fld">
+              <label htmlFor="sub_file_input">Attach file / document (optional, max 12MB)</label>
+              <input
+                id="sub_file_input"
+                type="file"
+                style={{ display: 'none' }}
+                accept=".pdf,.doc,.docx,.txt,.rtf,.odt,.png,.jpg,.jpeg,.zip"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    if (file.size > 12 * 1024 * 1024) {
+                      setToast('File exceeds 12MB limit.');
+                      e.target.value = '';
+                      return;
+                    }
+                    setSubFile(file);
+                  }
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="btn sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  onClick={() => document.getElementById('sub_file_input')?.click()}
+                >
+                  <Icon name="upload" /> Choose File
+                </button>
+                {subFile ? (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 10px',
+                      borderRadius: 16,
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      fontSize: 13,
+                      maxWidth: '100%',
+                      wordBreak: 'break-all'
+                    }}
+                  >
+                    📎 <b>{subFile.name}</b> ({(subFile.size / 1024).toFixed(1)} KB)
+                    <button
+                      type="button"
+                      style={{ background: 'none', border: 'none', color: 'var(--danger, #ef4444)', cursor: 'pointer', fontSize: 14, padding: '0 2px' }}
+                      title="Remove file"
+                      onClick={() => {
+                        setSubFile(null);
+                        const inp = document.getElementById('sub_file_input');
+                        if (inp) inp.value = '';
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ) : (
+                  <span className="muted" style={{ fontSize: 13 }}>No file selected</span>
+                )}
+              </div>
+            </div>
+            <div className="fld">
               <label htmlFor="sub_file">Attachment / Document name (optional)</label>
-              <input id="sub_file" name="fileName" placeholder="e.g. homework_chapter4.pdf" />
+              <input
+                id="sub_file"
+                name="fileName"
+                placeholder="e.g. homework_chapter4.pdf"
+                defaultValue={subFile ? subFile.name : ''}
+                key={subFile ? subFile.name : 'empty'}
+              />
             </div>
             <div className="acts">
-              <button type="button" className="btn" onClick={() => setSubmitModal(null)}>Cancel</button>
-              <button className="btn pr">Turn in assignment</button>
+              <button type="button" className="btn" disabled={submitting} onClick={() => { setSubmitModal(null); setSubFile(null); }}>
+                Cancel
+              </button>
+              <button className="btn pr" disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Turn in assignment'}
+              </button>
             </div>
           </form>
         </Modal>
@@ -533,7 +635,7 @@ export default function EntityPage({ k }) {
               <table className="rt">
                 <thead>
                   <tr>
-                    <th>Student</th><th>Submitted At</th><th>Grade</th><th>Feedback</th><th>Action</th>
+                    <th>Student</th><th>Submitted At</th><th>Attachment</th><th>Grade</th><th>Feedback</th><th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -541,6 +643,23 @@ export default function EntityPage({ k }) {
                     <tr key={sub.id}>
                       <td data-l="Student"><strong>{sub.studentName}</strong></td>
                       <td data-l="Submitted At">{new Date(sub.submitted_at).toLocaleDateString()}</td>
+                      <td data-l="Attachment">
+                        {sub.file_data ? (
+                          <a
+                            href={sub.file_data}
+                            download={sub.file_name || 'submission_file'}
+                            className="btn sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+                            title={`Download ${sub.file_name || 'attachment'}`}
+                          >
+                            <Icon name="download" /> {sub.file_name ? (sub.file_name.length > 18 ? sub.file_name.slice(0, 15) + '…' : sub.file_name) : 'Download'}
+                          </a>
+                        ) : sub.file_name ? (
+                          <span className="muted" style={{ fontSize: 13 }}>📎 {sub.file_name}</span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
                       <td data-l="Grade">{sub.grade !== null ? <b>{sub.grade}%</b> : <span className="muted">Ungraded</span>}</td>
                       <td data-l="Feedback">{sub.feedback || '—'}</td>
                       <td data-l="Action">
@@ -573,7 +692,23 @@ export default function EntityPage({ k }) {
             <div className="card" style={{ marginBottom: 12, background: 'var(--bg-card)' }}>
               <strong>Submission Content:</strong>
               <p style={{ marginTop: 6, whiteSpace: 'pre-wrap' }}>{gradeModal.content || 'No text submitted.'}</p>
-              {gradeModal.file_name && <small className="muted">Attached: {gradeModal.file_name}</small>}
+              {gradeModal.file_data ? (
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span className="muted" style={{ fontSize: 13 }}>Attached file:</span>
+                  <a
+                    href={gradeModal.file_data}
+                    download={gradeModal.file_name || 'submission_file'}
+                    className="btn sm pr"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+                  >
+                    <Icon name="download" /> Download {gradeModal.file_name || 'attachment'}
+                  </a>
+                </div>
+              ) : gradeModal.file_name ? (
+                <div style={{ marginTop: 8 }}>
+                  <small className="muted">Attached: {gradeModal.file_name}</small>
+                </div>
+              ) : null}
             </div>
             <div className="fld">
               <label htmlFor="g_val">Grade (0–100) *</label>
