@@ -74,8 +74,21 @@ app.use('/api',              auth, featuresRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {
-  app.use(express.static(DIST));
-  app.get('*', (req, res) => res.sendFile(join(DIST, 'index.html')));
+  app.use(express.static(DIST, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    }
+  }));
+  app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(join(DIST, 'index.html'));
+  });
   console.log('📦  Serving frontend from', DIST);
 } else {
   console.warn('⚠️   client/dist not found — API-only mode. Run npm run build first.');
