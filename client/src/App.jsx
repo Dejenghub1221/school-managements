@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'reac
 import { useAuth } from './context/AuthContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useLang } from './context/LangContext.jsx';
+import { Icon } from './icons.jsx';
 import { Notifications, UserProfileMenu } from './components/index.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';

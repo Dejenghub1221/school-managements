@@ -84,11 +84,12 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
   // User display metadata
   // User explicitly asked to replace "Hotel" by "School"
   const isSchoolAdmin = user?.role === 'admin';
-  const displayName = user?.name || (isSchoolAdmin ? 'School Admin' : `${user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1)} User`);
+  const roleName = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : 'Admin';
+  const displayName = user?.name || (isSchoolAdmin ? 'School Admin' : `${roleName} User`);
   const displayEmail = user?.email || (isSchoolAdmin ? 'admin@school.com' : `${user?.username || 'user'}@school.com`);
-  const initial = (displayName.charAt(0) || 'S').toUpperCase();
+  const initial = ((displayName && displayName.charAt(0)) || 'S').toUpperCase();
 
-  const roleLabel = roles[user?.role] || user?.role?.charAt(0).toUpperCase() + user?.role?.slice(1) || 'Admin';
+  const roleLabel = (user?.role && roles[user.role]) || roleName;
 
   const handlePasswordSubmit = e => {
     e.preventDefault();
