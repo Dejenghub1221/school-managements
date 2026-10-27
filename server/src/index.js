@@ -19,6 +19,8 @@ import reportsRouter     from './routes/reports.js';
 import settingsRouter    from './routes/settings.js';
 import classesListRouter from './routes/classesList.js';
 import featuresRouter    from './routes/features.js';
+import profileRouter     from './routes/profile.js';
+import { migrateProfileSchema } from './db/migrate_profile.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +74,7 @@ app.use('/api/reports',      auth, reportsRouter);
 app.use('/api/settings',     settingsRouter);
 app.use('/api/classes-list', auth, classesListRouter);
 app.use('/api',              auth, featuresRouter);
+app.use('/api/profile',      auth, profileRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {
@@ -100,8 +103,9 @@ app.use(errorHandler);
 const PORT = Number(process.env.PORT) || 4000;
 
 pool.query('SELECT 1')
-  .then(() => {
+  .then(async () => {
     console.log('✅  Database connected.');
+    await migrateProfileSchema();
     app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
   })
   .catch(err => {
