@@ -14,6 +14,7 @@ import Fees from './pages/Fees.jsx';
 import Timetable from './pages/Timetable.jsx';
 import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
+import Profile from './pages/Profile.jsx';
 
 const NAV = [
   ['dashboard', 'dashboard', '/'],
@@ -239,6 +240,7 @@ function Layout() {
         <main id="main" tabIndex="-1">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/students" element={<Guard k="students"><EntityPage k="students" /></Guard>} />
             <Route path="/teachers" element={<Guard k="teachers"><EntityPage k="teachers" /></Guard>} />
             <Route path="/classes" element={<Guard k="classes"><EntityPage k="classes" /></Guard>} />

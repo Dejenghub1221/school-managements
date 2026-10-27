@@ -39,8 +39,18 @@ export function AuthProvider({ children }) {
   };
   const can = k => session?.permissions?.[k] === 'w';
 
+  const updateUser = updates => {
+    setSession(prev => {
+      if (!prev) return prev;
+      const updatedUser = { ...(prev.user || {}), ...updates };
+      const newSession = { ...prev, user: updatedUser };
+      localStorage.setItem('session', JSON.stringify(newSession));
+      return newSession;
+    });
+  };
+
   return (
-    <Ctx.Provider value={{ user: session?.user, permissions: session?.permissions, login, logout, switchRole, see, can }}>
+    <Ctx.Provider value={{ user: session?.user, permissions: session?.permissions, login, logout, switchRole, see, can, updateUser }}>
       {children}
     </Ctx.Provider>
   );

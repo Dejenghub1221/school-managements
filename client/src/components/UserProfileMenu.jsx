@@ -143,8 +143,16 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
           aria-haspopup="true"
           title={`${displayName} (${roleLabel})`}
         >
-          <div className="user-avatar-circle" aria-hidden="true">
-            {initial}
+          <div className="user-avatar-circle" aria-hidden="true" style={{ overflow: 'hidden' }}>
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              initial
+            )}
           </div>
           <div className="user-trigger-info">
             <span className="user-trigger-name">{displayName}</span>
@@ -162,8 +170,16 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
           <div className="user-dropdown-panel" role="menu" aria-label="User account menu">
             {/* 1. User Info Header */}
             <div className="user-card-header">
-              <div className="user-avatar-circle lg" aria-hidden="true">
-                {initial}
+              <div className="user-avatar-circle lg" aria-hidden="true" style={{ overflow: 'hidden' }}>
+                {user?.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={displayName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  initial
+                )}
               </div>
               <div className="user-card-details">
                 <span className="user-card-name" title={displayName}>{displayName}</span>
@@ -185,7 +201,7 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
                 role="menuitem"
                 onClick={() => {
                   setOpen(false);
-                  setActiveModal('profile');
+                  navigate('/profile');
                 }}
               >
                 <span className="user-menu-item-icon" aria-hidden="true">
@@ -194,7 +210,7 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
                     <circle cx="12" cy="7" r="4" />
                   </svg>
                 </span>
-                <span>My Profile</span>
+                <span>{t('myProfile')}</span>
               </button>
 
               <button
@@ -330,8 +346,16 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
       {activeModal === 'profile' && (
         <Modal title="My User Profile" onClose={() => setActiveModal(null)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <div className="user-avatar-circle lg" style={{ width: 54, height: 54, fontSize: 22 }}>
-              {initial}
+            <div className="user-avatar-circle lg" style={{ width: 56, height: 56, fontSize: 22, overflow: 'hidden' }}>
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={displayName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                initial
+              )}
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 18 }}>{displayName}</h3>
@@ -392,10 +416,10 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
               className="btn pr"
               onClick={() => {
                 setActiveModal(null);
-                navigate('/settings');
+                navigate('/profile');
               }}
             >
-              School Settings
+              Open Full Profile Page
             </button>
           </div>
         </Modal>

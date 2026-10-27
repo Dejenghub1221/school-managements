@@ -16,10 +16,10 @@ export const permissions = role => Object.fromEntries(KEYS.map(k => [k, perm(rol
 
 const hash = bcrypt.hashSync(process.env.DEMO_PASSWORD || 'school123', 8);
 const USERS = [
-  { username: 'admin',   role: 'admin',   name: 'Administrator' },
-  { username: 'teacher', role: 'teacher', name: 'Ms. Alemu',     teacherId: 'T01' },
-  { username: 'student', role: 'student', name: 'Dejenie Abebe', studentId: 'S1034' },
-  { username: 'parent',  role: 'parent',  name: 'Abebe',         parentId: 'P23' },
+  { username: 'admin',   role: 'admin',   name: 'Administrator', email: 'admin@school.com', phone: '+251 91 123 4567' },
+  { username: 'teacher', role: 'teacher', name: 'Ms. Alemu',     teacherId: 'T01', email: 'alemu@school.com', phone: '+251 93 814 6792' },
+  { username: 'student', role: 'student', name: 'Dejenie Abebe', studentId: 'S1034', email: 'student@school.com', phone: '+251 96 554 4881' },
+  { username: 'parent',  role: 'parent',  name: 'Abebe',         parentId: 'P23', email: 'parent23@school.com', phone: '+251 99 848 2865' },
 ];
 
 const TOKEN_VERSION = 2;
@@ -41,6 +41,15 @@ export async function login(req, res) {
           username: u.username,
           role: u.role,
           name: u.name,
+          email: u.email || (u.role === 'admin' ? 'admin@school.com' : `${u.username}@school.com`),
+          phone: u.phone || '',
+          avatar: u.avatar || null,
+          bio: u.bio || '',
+          address: u.address || '',
+          gender: u.gender || '',
+          dob: u.dob || '',
+          emergencyContact: u.emergency_contact || '',
+          emergencyPhone: u.emergency_phone || '',
           teacherId: u.teacher_id,
           studentId: u.student_id,
           parentId: u.parent_id

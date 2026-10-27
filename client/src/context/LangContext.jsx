@@ -19,7 +19,7 @@ const T = {
     darkMode: 'Dark mode', lightMode: 'Light mode', systemMode: 'System',
     language: 'Language', english: 'English', amharic: 'አማርኛ',
     print: 'Print', exportCsv: 'Export CSV', exportPdf: 'Export PDF', exportExcel: 'Export Excel',
-    allRights: 'All rights reserved.',
+    allRights: 'All rights reserved.', myProfile: 'My Profile',
   },
   am: {
     dashboard: 'ዳሽቦርድ', students: 'ተማሪዎች', teachers: 'አስተማሪዎች',
@@ -35,7 +35,7 @@ const T = {
     darkMode: 'ጨለማ', lightMode: 'ብሩህ', systemMode: 'ሥርዓት',
     language: 'ቋንቋ', english: 'English', amharic: 'አማርኛ',
     print: 'አትም', exportCsv: 'CSV ላክ', exportPdf: 'PDF ላክ', exportExcel: 'Excel ላክ',
-    allRights: 'መብቶች ተጠብቀዋል።',
+    allRights: 'መብቶች ተጠብቀዋል።', myProfile: 'የእኔ መገለጫ',
   }
 };
 
