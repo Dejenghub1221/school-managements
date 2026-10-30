@@ -6,9 +6,9 @@ export const useAuth = () => useContext(Ctx);
 
 // Client-side fallback permissions (mirrors server API/auth.js PM)
 const PM_CLIENT = {
-  teacher: { dashboard: 'r', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r' },
-  student: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r' },
-  parent:  { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r' },
+  teacher: { dashboard: 'r', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r', lms: 'w' },
+  student: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r', lms: 'w' },
+  parent:  { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r', lms: 'r' },
 };
 
 export function AuthProvider({ children }) {

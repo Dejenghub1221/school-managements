@@ -15,9 +15,11 @@ import Timetable from './pages/Timetable.jsx';
 import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
 import Profile from './pages/Profile.jsx';
+import Lms from './pages/Lms.jsx';
 
 const NAV = [
   ['dashboard', 'dashboard', '/'],
+  ['lms', 'lms', '/lms'],
   ['students', 'students', '/students'],
   ['teachers', 'teachers', '/teachers'],
   ['classes', 'classes', '/classes'],
@@ -41,10 +43,10 @@ const ROLES = {
 };
 
 const NAV_BY_ROLE = {
-  admin: ['dashboard', 'students', 'teachers', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'fees', 'parents', 'timetable', 'library', 'reports', 'settings'],
-  teacher: ['dashboard', 'students', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'timetable', 'library', 'reports'],
-  student: ['dashboard', 'exams', 'assignments', 'timetable', 'library', 'fees', 'attendance'],
-  parent:  ['dashboard', 'exams', 'assignments', 'timetable', 'fees', 'attendance']
+  admin: ['dashboard', 'lms', 'students', 'teachers', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'fees', 'parents', 'timetable', 'library', 'reports', 'settings'],
+  teacher: ['dashboard', 'lms', 'students', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'timetable', 'library', 'reports'],
+  student: ['dashboard', 'lms', 'exams', 'assignments', 'timetable', 'library', 'fees', 'attendance'],
+  parent:  ['dashboard', 'lms', 'exams', 'assignments', 'timetable', 'fees', 'attendance']
 };
 
 function Guard({ k, children }) {
@@ -241,6 +243,7 @@ function Layout() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/lms/*" element={<Guard k="lms"><Lms /></Guard>} />
             <Route path="/students" element={<Guard k="students"><EntityPage k="students" /></Guard>} />
             <Route path="/teachers" element={<Guard k="teachers"><EntityPage k="teachers" /></Guard>} />
             <Route path="/classes" element={<Guard k="classes"><EntityPage k="classes" /></Guard>} />
