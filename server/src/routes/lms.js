@@ -157,23 +157,35 @@ router.get('/courses', async (req, res, next) => {
 
     const { rows: courses } = await pool.query(query, params);
 
-    // If student or parent, attach completion progress per course
-    if (role === 'student' && own?.length) {
-      const studentId = own[0];
+    // If student or parent, attach completion progress and quiz scores per course
+    if ((role === 'student' || role === 'parent') && own?.length) {
       const { rows: progressRows } = await pool.query(`
-        SELECT course_id, COUNT(*)::int AS completed_count
+        SELECT course_id, COUNT(DISTINCT lesson_id)::int AS completed_count
         FROM lms_lesson_progress
-        WHERE student_id = $1 AND completed = true
+        WHERE student_id = ANY($1) AND completed = true
         GROUP BY course_id
-      `, [studentId]);
+      `, [own]);
 
       const progressMap = Object.fromEntries(progressRows.map(p => [p.course_id, p.completed_count]));
+
+      const { rows: quizRows } = await pool.query(`
+        SELECT q.course_id, MAX(a.score) AS best_score, bool_or(a.passed) AS has_passed
+        FROM lms_quiz_attempts a
+        JOIN lms_quizzes q ON q.id = a.quiz_id
+        WHERE a.student_id = ANY($1)
+        GROUP BY q.course_id
+      `, [own]);
+      const quizMap = Object.fromEntries(quizRows.map(q => [q.course_id, q]));
 
       courses.forEach(c => {
         c.completedLessons = progressMap[c.id] || 0;
         c.progressPercentage = c.lesson_count > 0
           ? Math.min(100, Math.round(((c.completedLessons) / c.lesson_count) * 100))
           : 0;
+        if (quizMap[c.id]) {
+          c.bestQuizScore = Number(quizMap[c.id].best_score);
+          c.hasPassedQuiz = !!quizMap[c.id].has_passed;
+        }
       });
     }
 
@@ -269,10 +281,9 @@ router.get('/courses/:id', async (req, res, next) => {
     // Attach student progress if student or parent
     const own = await ownStudentIds(req.user);
     if (own?.length) {
-      const studentId = own[0];
       const { rows: progress } = await pool.query(
-        'SELECT lesson_id, completed, completed_at FROM lms_lesson_progress WHERE student_id = $1 AND course_id = $2',
-        [studentId, id]
+        'SELECT lesson_id, completed, completed_at FROM lms_lesson_progress WHERE student_id = ANY($1) AND course_id = $2',
+        [own, id]
       );
       const progMap = Object.fromEntries(progress.map(p => [p.lesson_id, p]));
 
@@ -281,13 +292,13 @@ router.get('/courses/:id', async (req, res, next) => {
         l.completed_at = progMap[l.id]?.completed_at || null;
       });
 
-      // Best quiz attempts for this student
+      // Best quiz attempts for this student (or linked children)
       const { rows: attempts } = await pool.query(`
         SELECT quiz_id, MAX(score) AS best_score, bool_or(passed) AS has_passed, COUNT(*)::int AS attempt_count
         FROM lms_quiz_attempts
-        WHERE student_id = $1
+        WHERE student_id = ANY($1)
         GROUP BY quiz_id
-      `, [studentId]);
+      `, [own]);
       const attMap = Object.fromEntries(attempts.map(a => [a.quiz_id, a]));
 
       quizzes.forEach(q => {
