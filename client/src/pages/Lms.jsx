@@ -231,12 +231,12 @@ export default function Lms() {
               <span>👤 Instructor: <strong>{courseDetail.teacher_name || 'Assigned Faculty'}</strong></span>
               <span>📚 {courseDetail.modules?.length || 0} Modules</span>
               <span>📖 {allCourseLessons.length} Lessons</span>
-              {isStudent && courseDetail.progressPercentage !== undefined && (
-                <span>🏆 Progress: <strong>{courseDetail.progressPercentage}%</strong> ({courseDetail.completedLessons}/{courseDetail.totalLessons})</span>
+              {(isStudent || isParent) && courseDetail.progressPercentage !== undefined && (
+                <span>🏆 {isParent ? "Child's Progress:" : "Progress:"} <strong>{courseDetail.progressPercentage}%</strong> ({courseDetail.completedLessons}/{courseDetail.totalLessons})</span>
               )}
             </div>
 
-            {isStudent && (
+            {(isStudent || isParent) && (
               <div className="lms-progress-wrap" style={{ maxWidth: 450, marginTop: 4 }}>
                 <div className="lms-progress-track" style={{ height: 10 }}>
                   <div
@@ -454,6 +454,11 @@ export default function Lms() {
                           {activeLesson.completed ? '✓ Completed (Click to undo)' : 'Mark as Completed ✓'}
                         </button>
                       )}
+                      {isParent && (
+                        <span className="lms-pill" style={{ background: activeLesson.completed ? 'rgba(16, 185, 129, 0.15)' : 'var(--hv)', color: activeLesson.completed ? '#059669' : 'var(--mu)', fontWeight: 600, padding: '6px 12px' }}>
+                          {activeLesson.completed ? '✓ Child Completed' : '⏳ Lesson In Progress'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Video Embed Player */}
@@ -583,19 +588,25 @@ export default function Lms() {
                           <span>🎯 Passing Score: {quiz.passing_score || 70}%</span>
                           <span>❓ {quiz.question_count || quiz.questions?.length || 0} Questions</span>
                           {quiz.bestScore !== null && quiz.bestScore !== undefined && (
-                            <span>🏆 Your High Score: <strong>{quiz.bestScore}%</strong></span>
+                            <span>🏆 {isParent ? "Child's High Score:" : "Your High Score:"} <strong>{quiz.bestScore}%</strong></span>
                           )}
                         </div>
                       </div>
 
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button
-                          type="button"
-                          className="btn pr"
-                          onClick={() => handleStartQuiz(quiz)}
-                        >
-                          {quiz.attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz 🚀'}
-                        </button>
+                        {isParent ? (
+                          <span className="lms-pill" style={{ background: 'var(--acs)', color: 'var(--ac)', fontWeight: 600, padding: '6px 12px' }}>
+                            👁️ Observer View
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn pr"
+                            onClick={() => handleStartQuiz(quiz)}
+                          >
+                            {quiz.attemptCount > 0 ? 'Retake Quiz' : 'Start Quiz 🚀'}
+                          </button>
+                        )}
                         {write && (
                           <button
                             type="button"
@@ -1306,11 +1317,11 @@ export default function Lms() {
                 <h3 className="lms-card-title">{c.title}</h3>
                 <p className="lms-card-desc">{c.description || 'Comprehensive curriculum modules and interactive quizzes.'}</p>
 
-                {/* Progress bar if student */}
-                {isStudent && c.progressPercentage !== undefined && (
+                {/* Progress bar if student or parent */}
+                {(isStudent || isParent) && c.progressPercentage !== undefined && (
                   <div className="lms-progress-wrap">
                     <div className="lms-progress-header">
-                      <span>Course Progress</span>
+                      <span>{isParent ? "Child's Progress" : "Course Progress"}</span>
                       <span>{c.progressPercentage}%</span>
                     </div>
                     <div className="lms-progress-track">
@@ -1331,7 +1342,7 @@ export default function Lms() {
                     style={{ flex: 1 }}
                     onClick={() => setActiveCourseId(c.id)}
                   >
-                    {isStudent && (c.completedLessons || 0) > 0 ? 'Continue Learning ➔' : 'Enter Course ➔'}
+                    {isParent ? 'View Course & Child Progress ➔' : (isStudent && (c.completedLessons || 0) > 0 ? 'Continue Learning ➔' : 'Enter Course ➔')}
                   </button>
 
                   {write && (
