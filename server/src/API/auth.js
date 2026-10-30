@@ -6,11 +6,11 @@ const SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 // 'r' = view, 'w' = view and change. Admin gets 'w' everywhere.
 const PM = {
-  teacher: { dashboard: 'r', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r' },
-  student: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r' },
-  parent:  { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r' },
+  teacher: { dashboard: 'r', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r', lms: 'w' },
+  student: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r', lms: 'w' },
+  parent:  { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r', lms: 'r' },
 };
-const KEYS = ['dashboard','students','teachers','classes','subjects','attendance','exams','assignments','fees','parents','timetable','library','reports','settings'];
+const KEYS = ['dashboard','students','teachers','classes','subjects','attendance','exams','assignments','fees','parents','timetable','library','reports','settings','lms'];
 export const perm = (role, k) => (role === 'admin' ? 'w' : PM[role]?.[k] || '');
 export const permissions = role => Object.fromEntries(KEYS.map(k => [k, perm(role, k)]).filter(([, v]) => v));
 

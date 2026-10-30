@@ -9,18 +9,20 @@ import { pool } from './db/index.js';
 import { login, auth } from './API/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { setupCrud } from './routes/crud.js';
-import studentsRouter    from './routes/students.js';
-import paymentsRouter    from './routes/payments.js';
-import statsRouter       from './routes/stats.js';
-import attendanceRouter  from './routes/attendance.js';
-import resultsRouter     from './routes/results.js';
-import timetableRouter   from './routes/timetable.js';
-import reportsRouter     from './routes/reports.js';
-import settingsRouter    from './routes/settings.js';
+import studentsRouter from './routes/students.js';
+import paymentsRouter from './routes/payments.js';
+import statsRouter from './routes/stats.js';
+import attendanceRouter from './routes/attendance.js';
+import resultsRouter from './routes/results.js';
+import timetableRouter from './routes/timetable.js';
+import reportsRouter from './routes/reports.js';
+import settingsRouter from './routes/settings.js';
 import classesListRouter from './routes/classesList.js';
-import featuresRouter    from './routes/features.js';
-import profileRouter     from './routes/profile.js';
+import featuresRouter from './routes/features.js';
+import profileRouter from './routes/profile.js';
+import lmsRouter from './routes/lms.js';
 import { migrateProfileSchema } from './db/migrate_profile.js';
+import { migrateLmsSchema } from './db/migrate_lms.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -64,17 +66,18 @@ app.get(['/api', '/api/health'], (req, res) => {
 });
 app.post('/api/login', login);
 setupCrud(app);
-app.use('/api/students',     auth, studentsRouter);
-app.use('/api/payments',     auth, paymentsRouter);
-app.use('/api',              auth, statsRouter);
-app.use('/api/attendance',   auth, attendanceRouter);
-app.use('/api/results',      auth, resultsRouter);
-app.use('/api/timetable',    auth, timetableRouter);
-app.use('/api/reports',      auth, reportsRouter);
-app.use('/api/settings',     settingsRouter);
+app.use('/api/students', auth, studentsRouter);
+app.use('/api/payments', auth, paymentsRouter);
+app.use('/api', auth, statsRouter);
+app.use('/api/attendance', auth, attendanceRouter);
+app.use('/api/results', auth, resultsRouter);
+app.use('/api/timetable', auth, timetableRouter);
+app.use('/api/reports', auth, reportsRouter);
+app.use('/api/settings', settingsRouter);
 app.use('/api/classes-list', auth, classesListRouter);
-app.use('/api',              auth, featuresRouter);
-app.use('/api/profile',      auth, profileRouter);
+app.use('/api', auth, featuresRouter);
+app.use('/api/profile', auth, profileRouter);
+app.use('/api/lms', auth, lmsRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {
@@ -106,6 +109,7 @@ pool.query('SELECT 1')
   .then(async () => {
     console.log('✅  Database connected.');
     await migrateProfileSchema();
+    await migrateLmsSchema();
     app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
   })
   .catch(err => {
