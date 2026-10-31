@@ -6,9 +6,9 @@ export const useAuth = () => useContext(Ctx);
 
 // Client-side fallback permissions (mirrors server API/auth.js PM)
 const PM_CLIENT = {
-  teacher: { dashboard: 'r', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r', lms: 'w' },
-  student: { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r', lms: 'w' },
-  parent:  { dashboard: 'r', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r', lms: 'r' },
+  teacher: { dashboard: 'r', teacherApp: 'w', students: 'r', teachers: 'r', classes: 'r', subjects: 'r', attendance: 'w', exams: 'w', assignments: 'w', parents: 'r', timetable: 'r', library: 'r', reports: 'r', lms: 'w' },
+  student: { dashboard: 'r', studentApp: 'w', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', library: 'r', fees: 'r', attendance: 'r', lms: 'w' },
+  parent:  { dashboard: 'r', familyPortal: 'w', parentApp: 'w', students: 'r', classes: 'r', subjects: 'r', exams: 'r', assignments: 'r', timetable: 'r', fees: 'r', attendance: 'r', lms: 'r' },
 };
 
 export function AuthProvider({ children }) {
@@ -37,7 +37,7 @@ export function AuthProvider({ children }) {
     const role = session?.user?.role;
     return role === 'admin' || !!(PM_CLIENT[role]?.[k]);
   };
-  const can = k => session?.permissions?.[k] === 'w';
+  const can = k => session?.user?.role === 'admin' || session?.permissions?.[k] === 'w';
 
   const updateUser = updates => {
     setSession(prev => {

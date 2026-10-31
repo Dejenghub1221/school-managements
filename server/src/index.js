@@ -21,6 +21,9 @@ import classesListRouter from './routes/classesList.js';
 import featuresRouter from './routes/features.js';
 import profileRouter from './routes/profile.js';
 import lmsRouter from './routes/lms.js';
+import parentAppRouter from './routes/parentApp.js';
+import studentAppRouter from './routes/studentApp.js';
+import teacherAppRouter from './routes/teacherApp.js';
 import { migrateProfileSchema } from './db/migrate_profile.js';
 import { migrateLmsSchema } from './db/migrate_lms.js';
 
@@ -78,6 +81,9 @@ app.use('/api/classes-list', auth, classesListRouter);
 app.use('/api', auth, featuresRouter);
 app.use('/api/profile', auth, profileRouter);
 app.use('/api/lms', auth, lmsRouter);
+app.use('/api/parent-app', auth, parentAppRouter);
+app.use('/api/student-app', auth, studentAppRouter);
+app.use('/api/teacher-app', auth, teacherAppRouter);
 
 // ── Serve React frontend ──────────────────────────────────────────────────
 if (DIST) {
