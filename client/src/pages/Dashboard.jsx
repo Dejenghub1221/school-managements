@@ -4,9 +4,22 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { Icon } from '../icons.jsx';
 import { Badge, Empty, Modal, Skeleton, StudentProfile, Toast } from '../components/index.js';
+import ParentApp from './ParentApp.jsx';
+import StudentApp from './StudentApp.jsx';
+import TeacherApp from './TeacherApp.jsx';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  if (user?.role === 'parent') {
+    return <ParentApp />;
+  }
+  if (user?.role === 'student') {
+    return <StudentApp />;
+  }
+  if (user?.role === 'teacher') {
+    return <TeacherApp />;
+  }
+
   const { money } = useSettings();
   const family = user?.role === 'student' || user?.role === 'parent';
   const isParent = user?.role === 'parent';

@@ -16,9 +16,15 @@ import Reports from './pages/Reports.jsx';
 import Settings from './pages/Settings.jsx';
 import Profile from './pages/Profile.jsx';
 import Lms from './pages/Lms.jsx';
+import ParentApp from './pages/ParentApp.jsx';
+import StudentApp from './pages/StudentApp.jsx';
+import TeacherApp from './pages/TeacherApp.jsx';
 
 const NAV = [
   ['dashboard', 'dashboard', '/'],
+  ['teacherApp', 'teacherApp', '/teacher-app'],
+  ['studentApp', 'studentApp', '/student-app'],
+  ['familyPortal', 'familyPortal', '/family-portal'],
   ['lms', 'lms', '/lms'],
   ['students', 'students', '/students'],
   ['teachers', 'teachers', '/teachers'],
@@ -43,7 +49,7 @@ const ROLES = {
 };
 
 const NAV_BY_ROLE = {
-  admin: ['dashboard', 'lms', 'students', 'teachers', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'fees', 'parents', 'timetable', 'library', 'reports', 'settings'],
+  admin: ['dashboard', 'teacherApp', 'studentApp', 'familyPortal', 'lms', 'students', 'teachers', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'fees', 'parents', 'timetable', 'library', 'reports', 'settings'],
   teacher: ['dashboard', 'lms', 'students', 'classes', 'subjects', 'attendance', 'exams', 'assignments', 'timetable', 'library', 'reports'],
   student: ['dashboard', 'lms', 'exams', 'assignments', 'timetable', 'library', 'fees', 'attendance'],
   parent:  ['dashboard', 'lms', 'exams', 'assignments', 'timetable', 'fees', 'attendance']
@@ -209,7 +215,7 @@ function Layout() {
           >
             <Icon name="menu" className="menu-icon" />
           </button>
-          <strong id="pt">{t(activeKey)}</strong>
+          <strong id="pt">{user?.role === 'parent' && activeKey === 'dashboard' ? t('familyPortal') : (user?.role === 'student' && activeKey === 'dashboard' ? t('studentApp') : (user?.role === 'teacher' && activeKey === 'dashboard' ? t('teacherApp') : t(activeKey)))}</strong>
           {isReadOnly && <span className="bd y" id="vo">{t('viewOnly')}</span>}
           <span id="ay">{t('academicYear')} {settings.year}</span>
 
@@ -242,6 +248,10 @@ function Layout() {
         <main id="main" tabIndex="-1">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/teacher-app" element={<Guard k="teacherApp"><TeacherApp /></Guard>} />
+            <Route path="/student-app" element={<Guard k="studentApp"><StudentApp /></Guard>} />
+            <Route path="/family-portal" element={<Guard k="familyPortal"><ParentApp /></Guard>} />
+            <Route path="/parent-app" element={<Guard k="familyPortal"><ParentApp /></Guard>} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/lms/*" element={<Guard k="lms"><Lms /></Guard>} />
             <Route path="/students" element={<Guard k="students"><EntityPage k="students" /></Guard>} />
