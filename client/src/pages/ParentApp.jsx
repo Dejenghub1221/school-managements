@@ -51,6 +51,7 @@ export default function ParentApp() {
   const [absBusy, setAbsBusy] = useState(false);
 
   const [reportCardModal, setReportCardModal] = useState(null); // child object
+  const [clearanceModal, setClearanceModal] = useState(null); // child object for clearance slip
 
   // Load portal data
   const loadPortal = async () => {
@@ -533,6 +534,37 @@ export default function ParentApp() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Reported Advance Absence Requests & Teacher Verification */}
+              <div style={{ marginTop: 24, borderTop: '1px solid var(--bd)', paddingTop: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem' }}>📋 Reported Absence Notices & Teacher Verification</h4>
+                  <button type="button" className="btn xs pr" onClick={() => setAbsenceModal(true)}>
+                    + Submit New Notice
+                  </button>
+                </div>
+                {portal?.absenceReports?.length ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {portal.absenceReports.map(ar => (
+                      <div key={ar.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8, padding: '10px 14px', flexWrap: 'wrap', gap: 8 }}>
+                        <div>
+                          <strong>{ar.date}</strong> — <span>{ar.reason}</span>
+                          <div style={{ fontSize: 12, color: 'var(--mu)', marginTop: 2 }}>
+                            Reported on {new Date(ar.created_at).toLocaleDateString()} for {ar.studentName || selectedChild.name}
+                          </div>
+                        </div>
+                        <span className={`status-pill ${ar.status === 'Excused' ? 'status-graded' : 'status-pending'}`}>
+                          {ar.status === 'Excused' ? '✓ Excused by Teacher' : '⏱ Pending Teacher Review'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted" style={{ fontSize: 13, margin: '6px 0 0' }}>
+                    No absence notices reported. If your child will be absent for a medical appointment or family event, click "Report Planned Absence".
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -546,6 +578,13 @@ export default function ParentApp() {
                     Transparent billing, term tuition schedules, online payments, and instant digital receipts.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  className="btn sm"
+                  onClick={() => setClearanceModal(selectedChild)}
+                >
+                  📄 Examination Clearance Slip
+                </button>
               </div>
 
               {/* Balance Summary Cards */}
@@ -1204,6 +1243,76 @@ export default function ParentApp() {
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Official Fee Clearance Statement Modal */}
+      {clearanceModal && (
+        <Modal title="Official Examination Clearance Slip" onClose={() => setClearanceModal(null)}>
+          <div className="print-area" style={{ padding: 16 }}>
+            <div style={{ textAlign: 'center', borderBottom: '2px solid var(--bd)', paddingBottom: 14, marginBottom: 16 }}>
+              <h2 style={{ margin: 0 }}>ABC Academy</h2>
+              <div className="muted" style={{ fontSize: 13 }}>Official Financial Clearance & Examination Eligibility Certificate</div>
+              <small className="muted">Academic Year 2026/27 · Term 1</small>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <div><strong>Student Name:</strong> {clearanceModal.name}</div>
+              <div><strong>Student ID:</strong> {clearanceModal.id}</div>
+              <div><strong>Class / Grade:</strong> {clearanceModal.cls}</div>
+              <div><strong>Guardian:</strong> {portal?.parent?.name || 'Parent'}</div>
+            </div>
+
+            <div style={{ background: 'var(--sf)', padding: 14, borderRadius: 8, border: '1px solid var(--bd)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--bd)' }}>
+                <span>Total Term Tuition & Fees:</span>
+                <strong>{money(clearanceModal.fees?.totalBilled || 0)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--bd)' }}>
+                <span>Amount Paid to Date:</span>
+                <strong style={{ color: '#059669' }}>{money(clearanceModal.fees?.totalPaid || 0)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '1.05rem' }}>
+                <span>Remaining Balance Due:</span>
+                <strong style={{ color: clearanceModal.fees?.balance > 0 ? 'var(--ac)' : '#059669' }}>
+                  {money(clearanceModal.fees?.balance || 0)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Official Eligibility Clearance Stamp */}
+            <div style={{
+              textAlign: 'center',
+              padding: 16,
+              borderRadius: 8,
+              background: clearanceModal.fees?.balance <= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+              border: `2px dashed ${clearanceModal.fees?.balance <= 0 ? '#059669' : '#dc2626'}`,
+              marginBottom: 18
+            }}>
+              <h3 style={{ margin: 0, color: clearanceModal.fees?.balance <= 0 ? '#059669' : '#dc2626' }}>
+                {clearanceModal.fees?.balance <= 0 ? '✓ CLEARED FOR TERM EXAMINATIONS' : '⚠️ OUTSTANDING BALANCE — PAYMENT REQUIRED'}
+              </h3>
+              <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--tx)' }}>
+                {clearanceModal.fees?.balance <= 0
+                  ? 'The student has met all tuition requirements and is certified eligible for term assessments and examinations.'
+                  : 'Please settle the remaining balance online or at the finance office before the examination date.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 24, fontSize: 12, color: 'var(--mu)', borderTop: '1px solid var(--bd)', paddingTop: 12 }}>
+              <span>Generated on: {new Date().toLocaleDateString()}</span>
+              <span>Finance Office & Registrar Seal</span>
+            </div>
+
+            <div className="acts" style={{ marginTop: 18 }}>
+              <button type="button" className="btn pr" onClick={() => window.print()}>
+                🖨️ Print / Download Clearance Slip
+              </button>
+              <button type="button" className="btn" onClick={() => setClearanceModal(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

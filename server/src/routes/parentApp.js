@@ -227,6 +227,16 @@ router.get('/portal', async (req, res, next) => {
       [classes.length ? classes : ['7A']]
     );
 
+    // 6. Absence notices submitted by this parent
+    const { rows: absenceReports } = await pool.query(
+      `SELECT ar.*, s.name AS "studentName", s.cls
+       FROM absence_reports ar
+       JOIN students s ON s.id = ar.student_id
+       WHERE ar.student_id = ANY($1)
+       ORDER BY ar.created_at DESC LIMIT 20`,
+      [own]
+    );
+
     res.json({
       parent: {
         id: req.user.parentId || 'P23',
@@ -238,6 +248,7 @@ router.get('/portal', async (req, res, next) => {
       children,
       announcements,
       messages,
+      absenceReports,
       teachers: teachers.length ? teachers : [
         { id: 'T01', name: 'Ms. Alemu', subject: 'Mathematics', email: 'alemu@school.com', phone: '+251 93 814 6792' },
         { id: 'T02', name: 'Mr. Baye', subject: 'English', email: 'baye@school.com', phone: '+251 96 119 8013' },

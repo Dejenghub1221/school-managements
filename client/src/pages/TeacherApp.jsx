@@ -48,6 +48,11 @@ export default function TeacherApp() {
   const [assignmentModal, setAssignmentModal] = useState(false);
   const [messageModal, setMessageModal] = useState(null); // parent object to message
   const [announcementModal, setAnnouncementModal] = useState(false);
+  const [submissionsModal, setSubmissionsModal] = useState(null); // { assignment, submissions: [], loading: false }
+  const [subGradeDraft, setSubGradeDraft] = useState({}); // { studentId: { grade, feedback } }
+  const [confirmMeetingModal, setConfirmMeetingModal] = useState(null); // message object
+  const [meetingConfirmDate, setMeetingConfirmDate] = useState('');
+  const [meetingConfirmNote, setMeetingConfirmNote] = useState('');
 
   // Form states for modals
   const [newLesson, setNewLesson] = useState({
@@ -287,6 +292,67 @@ export default function TeacherApp() {
     }
   };
 
+  // Open assignment submissions reviewer
+  const openSubmissions = async (assignment) => {
+    setSubmissionsModal({ assignment, submissions: [], loading: true });
+    try {
+      const res = await api(`/teacher-app/assignments/${assignment.id}/submissions`);
+      setSubmissionsModal({ assignment, submissions: res.submissions || [], stats: res, loading: false });
+      const draft = {};
+      (res.submissions || []).forEach(s => {
+        draft[s.studentId] = { grade: s.grade ?? '', feedback: s.feedback || '' };
+      });
+      setSubGradeDraft(draft);
+    } catch (e) {
+      setToast(e.message);
+      setSubmissionsModal(null);
+    }
+  };
+
+  // Save submission grade & feedback
+  const handleSaveSubmissionGrade = async (sub) => {
+    const draft = subGradeDraft[sub.studentId] || {};
+    try {
+      await api('/teacher-app/grade-submission', {
+        method: 'PUT',
+        body: {
+          submissionId: sub.submissionId,
+          assignmentId: submissionsModal.assignment.id,
+          studentId: sub.studentId,
+          grade: Number(draft.grade),
+          feedback: draft.feedback
+        }
+      });
+      setToast(`Grade saved for ${sub.studentName}!`);
+      openSubmissions(submissionsModal.assignment);
+      loadPortal();
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
+
+  // Confirm parent consultation meeting
+  const handleConfirmConsultation = async (e) => {
+    e.preventDefault();
+    if (!confirmMeetingModal) return;
+    try {
+      await api('/teacher-app/confirm-meeting', {
+        method: 'PUT',
+        body: {
+          messageId: confirmMeetingModal.id,
+          meetingDate: meetingConfirmDate || confirmMeetingModal.meeting_date,
+          replyNote: meetingConfirmNote
+        }
+      });
+      setToast('Consultation confirmed and response sent to parent.');
+      setConfirmMeetingModal(null);
+      setMeetingConfirmNote('');
+      loadPortal();
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
+
   const todayStr = new Date().toLocaleDateString('en', {
     weekday: 'long',
     month: 'long',
@@ -477,6 +543,105 @@ export default function TeacherApp() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Class Assignments & Student Submissions */}
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--bd)', paddingTop: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1.05rem' }}>📋 Homework Assignments for Class {selectedClass}</h4>
+                <small className="muted">Review student solution submissions, enter marks, and provide grading feedback.</small>
+              </div>
+              <button
+                type="button"
+                className="btn sm pr"
+                onClick={() => {
+                  setNewAssignment(prev => ({ ...prev, cls: selectedClass }));
+                  setAssignmentModal(true);
+                }}
+              >
+                + Set New Assignment
+              </button>
+            </div>
+
+            {assignments.filter(a => a.cls === selectedClass || a.cls === 'All').length === 0 ? (
+              <p className="muted" style={{ fontSize: 13 }}>No active homework set for Class {selectedClass}. Click "+ Set New Assignment" above.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                {assignments.filter(a => a.cls === selectedClass || a.cls === 'All').map(a => (
+                  <div key={a.id} style={{ background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 10, padding: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span className="bd g">{a.subject}</span>
+                      <small className="muted">Due: {a.due}</small>
+                    </div>
+                    <strong style={{ display: 'block', margin: '8px 0 4px', fontSize: '1rem' }}>{a.title}</strong>
+                    <div style={{ fontSize: 12, color: 'var(--mut)', marginBottom: 12 }}>
+                      Submitted: <strong>{a.submission_count || 0}</strong> · Graded: <strong>{a.graded_count || 0}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn sm pr"
+                      style={{ width: '100%' }}
+                      onClick={() => openSubmissions(a)}
+                    >
+                      📝 Review Submissions ({a.submission_count || 0})
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pending Parent Consultation Requests */}
+          <div style={{ marginTop: 24, borderTop: '1px solid var(--bd)', paddingTop: 18 }}>
+            <h4 style={{ margin: '0 0 4px', fontSize: '1.05rem' }}>💬 Parent Consultation Requests & Messages</h4>
+            <small className="muted" style={{ display: 'block', marginBottom: 12 }}>Direct inquiries and meeting requests sent by parents of your students.</small>
+
+            {messages.filter(m => m.recipient_role === 'teacher' || m.recipient_id === teacher?.id).length === 0 ? (
+              <p className="muted" style={{ fontSize: 13 }}>No pending parent inquiries for this class.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {messages.filter(m => m.recipient_role === 'teacher' || m.recipient_id === teacher?.id).slice(0, 5).map(m => (
+                  <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--sf)', border: '1px solid var(--bd)', borderRadius: 8, padding: 14, flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <strong>{m.sender_name}</strong>
+                        <span className="bd y">{m.subject}</span>
+                        {m.meeting_date && <span className="bd g">📅 Requested: {m.meeting_date}</span>}
+                      </div>
+                      <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--tx)' }}>{m.body}</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {m.meeting_date && (
+                        <button
+                          type="button"
+                          className="btn sm pr"
+                          onClick={() => {
+                            setConfirmMeetingModal(m);
+                            setMeetingConfirmDate(m.meeting_date);
+                          }}
+                        >
+                          ✓ Confirm Consultation
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn sm"
+                        onClick={() => {
+                          setMessageModal({
+                            id: m.sender_id,
+                            name: m.sender_name,
+                            studentName: 'Student'
+                          });
+                        }}
+                      >
+                        Reply
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1210,6 +1375,178 @@ export default function TeacherApp() {
               </button>
               <button type="submit" className="btn pr">
                 ✓ Publish Assignment
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Review Submissions & Grade Modal */}
+      {submissionsModal && (
+        <Modal
+          title={`Submissions & Grading: ${submissionsModal.assignment?.title}`}
+          onClose={() => setSubmissionsModal(null)}
+        >
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="bd g">{submissionsModal.assignment?.subject} · Class {submissionsModal.assignment?.cls}</span>
+              <span className="muted">Due: {submissionsModal.assignment?.due}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+              <span className="badge">Total Enrolled: {submissionsModal.stats?.totalStudents || 0}</span>
+              <span className="badge" style={{ background: '#2563eb', color: '#fff' }}>Submitted: {submissionsModal.stats?.submittedCount || 0}</span>
+              <span className="badge" style={{ background: '#059669', color: '#fff' }}>Graded: {submissionsModal.stats?.gradedCount || 0}</span>
+            </div>
+          </div>
+
+          <div className="tw" style={{ maxHeight: 420, overflowY: 'auto' }}>
+            <table className="rt">
+              <thead>
+                <tr>
+                  <th scope="col">Student</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Submission Content / File</th>
+                  <th scope="col" style={{ width: 100 }}>Score (0-100)</th>
+                  <th scope="col">Feedback Remarks</th>
+                  <th scope="col" style={{ width: 90 }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissionsModal.submissions.map(sub => {
+                  const draft = subGradeDraft[sub.studentId] || {};
+                  return (
+                    <tr key={sub.studentId}>
+                      <td data-l="Student">
+                        <strong>{sub.studentName}</strong>
+                        <div style={{ fontSize: 11, color: 'var(--mut)' }}>ID: {sub.studentId}</div>
+                      </td>
+                      <td data-l="Status">
+                        <span className={`status-pill ${sub.status === 'Graded' ? 'status-graded' : sub.status === 'Submitted' ? 'status-submitted' : 'status-pending'}`}>
+                          {sub.status}
+                        </span>
+                        {sub.submittedAt && (
+                          <div style={{ fontSize: 10, color: 'var(--mut)', marginTop: 2 }}>
+                            {new Date(sub.submittedAt).toLocaleDateString()}
+                          </div>
+                        )}
+                      </td>
+                      <td data-l="Work">
+                        {sub.content ? (
+                          <div style={{ fontSize: 13, background: 'var(--hv)', padding: '6px 8px', borderRadius: 6, maxHeight: 60, overflowY: 'auto' }}>
+                            {sub.content}
+                          </div>
+                        ) : sub.fileName ? (
+                          <span className="bd g">📎 {sub.fileName}</span>
+                        ) : (
+                          <span className="muted" style={{ fontStyle: 'italic', fontSize: 12 }}>Not submitted yet</span>
+                        )}
+                      </td>
+                      <td data-l="Score">
+                        <input
+                          type="number"
+                          className="input"
+                          min="0"
+                          max="100"
+                          style={{ width: '80px' }}
+                          placeholder="—"
+                          value={draft.grade ?? ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setSubGradeDraft(prev => ({
+                              ...prev,
+                              [sub.studentId]: { ...(prev[sub.studentId] || {}), grade: val }
+                            }));
+                          }}
+                        />
+                      </td>
+                      <td data-l="Feedback">
+                        <input
+                          type="text"
+                          className="input"
+                          placeholder="e.g. Well argued points"
+                          style={{ width: '100%' }}
+                          value={draft.feedback || ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setSubGradeDraft(prev => ({
+                              ...prev,
+                              [sub.studentId]: { ...(prev[sub.studentId] || {}), feedback: val }
+                            }));
+                          }}
+                        />
+                      </td>
+                      <td data-l="Action">
+                        <button
+                          type="button"
+                          className="btn xs pr"
+                          onClick={() => handleSaveSubmissionGrade(sub)}
+                        >
+                          Save
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+            <button type="button" className="btn" onClick={() => setSubmissionsModal(null)}>
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Confirm Consultation Meeting Modal */}
+      {confirmMeetingModal && (
+        <Modal
+          title={`Confirm Consultation: ${confirmMeetingModal.sender_name}`}
+          onClose={() => setConfirmMeetingModal(null)}
+        >
+          <form onSubmit={handleConfirmConsultation}>
+            <div style={{ marginBottom: 12 }}>
+              <span className="bd g">Subject: {confirmMeetingModal.subject}</span>
+              <p style={{ margin: '8px 0 0', fontSize: 13, background: 'var(--sf)', padding: 10, borderRadius: 8 }}>
+                "{confirmMeetingModal.body}"
+              </p>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+                Confirmed Consultation Date / Time:
+              </label>
+              <input
+                type="text"
+                className="input"
+                style={{ width: '100%' }}
+                value={meetingConfirmDate}
+                onChange={e => setMeetingConfirmDate(e.target.value)}
+                placeholder="e.g. 2026-11-05 at 10:30 AM (Room 102)"
+                required
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>
+                Teacher Note to Parent (Optional):
+              </label>
+              <textarea
+                className="input"
+                rows={3}
+                style={{ width: '100%', resize: 'vertical' }}
+                placeholder="I look forward to discussing the student's progress and recent test results..."
+                value={meetingConfirmNote}
+                onChange={e => setMeetingConfirmNote(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn" onClick={() => setConfirmMeetingModal(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn pr">
+                ✓ Confirm & Notify Parent
               </button>
             </div>
           </form>
