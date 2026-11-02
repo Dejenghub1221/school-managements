@@ -441,4 +441,143 @@ router.post('/assignment', async (req, res, next) => {
   }
 });
 
+// ── GET /api/teacher-app/assignments/:id/submissions ────────────────────────
+router.get('/assignments/:id/submissions', async (req, res, next) => {
+  try {
+    const assignmentId = req.params.id;
+    const { rows: aRows } = await pool.query('SELECT * FROM assignments WHERE id = $1', [assignmentId]);
+    if (!aRows.length) return res.status(404).json({ error: 'Assignment not found.' });
+    const assignment = aRows[0];
+
+    // Fetch class students
+    const { rows: students } = await pool.query(
+      `SELECT s.id, s.name, s.cls
+       FROM students s
+       WHERE s.cls = $1 OR $1 = 'All'
+       ORDER BY s.name ASC`,
+      [assignment.cls]
+    );
+
+    // Fetch existing submissions
+    const { rows: subs } = await pool.query(
+      `SELECT sub.*, s.name AS "studentName"
+       FROM submissions sub
+       JOIN students s ON s.id = sub.student_id
+       WHERE sub.assignment_id = $1`,
+      [assignmentId]
+    );
+
+    const subsMap = new Map();
+    subs.forEach(s => subsMap.set(s.student_id, s));
+
+    const roster = students.map(st => {
+      const sub = subsMap.get(st.id);
+      return {
+        studentId: st.id,
+        studentName: st.name,
+        class: st.cls,
+        submissionId: sub?.id || null,
+        status: sub?.status || 'Pending',
+        submittedAt: sub?.submitted_at || null,
+        content: sub?.content || '',
+        fileName: sub?.file_name || '',
+        grade: sub?.grade !== undefined && sub?.grade !== null ? Number(sub.grade) : null,
+        feedback: sub?.feedback || ''
+      };
+    });
+
+    res.json({
+      assignment,
+      totalStudents: students.length,
+      submittedCount: subs.length,
+      gradedCount: subs.filter(s => s.status === 'Graded').length,
+      submissions: roster
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PUT /api/teacher-app/grade-submission ────────────────────────────────────
+router.put('/grade-submission', async (req, res, next) => {
+  try {
+    const { submissionId, assignmentId, studentId, grade, feedback } = req.body || {};
+    const val = Math.max(0, Math.min(100, Number(grade) || 0));
+
+    let updatedRow;
+    if (submissionId) {
+      const { rows } = await pool.query(
+        `UPDATE submissions
+         SET grade = $1, feedback = $2, status = 'Graded'
+         WHERE id = $3
+         RETURNING *`,
+        [val, feedback || '', submissionId]
+      );
+      updatedRow = rows[0];
+    } else if (assignmentId && studentId) {
+      const subId = `SUB_${Date.now().toString().slice(-6)}`;
+      const { rows } = await pool.query(
+        `INSERT INTO submissions (id, assignment_id, student_id, content, grade, feedback, status)
+         VALUES ($1, $2, $3, 'Graded directly by teacher', $4, $5, 'Graded')
+         ON CONFLICT (assignment_id, student_id) DO UPDATE SET
+           grade = EXCLUDED.grade,
+           feedback = EXCLUDED.feedback,
+           status = 'Graded'
+         RETURNING *`,
+        [subId, assignmentId, studentId, val, feedback || '']
+      );
+      updatedRow = rows[0];
+    } else {
+      return res.status(400).json({ error: 'submissionId or (assignmentId and studentId) required.' });
+    }
+
+    await auditLog(req.user.username, req.user.role, 'TEACHER_GRADE_SUBMISSION', 'submissions', updatedRow?.id || 'SUB', { grade: val, feedback });
+    res.json({ success: true, submission: updatedRow });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── PUT /api/teacher-app/confirm-meeting ─────────────────────────────────────
+router.put('/confirm-meeting', async (req, res, next) => {
+  try {
+    const { messageId, meetingDate, replyNote } = req.body || {};
+    if (!messageId) return res.status(400).json({ error: 'messageId is required.' });
+
+    const { rows: mRows } = await pool.query('SELECT * FROM messages WHERE id = $1', [messageId]);
+    if (!mRows.length) return res.status(404).json({ error: 'Message not found.' });
+    const originalMsg = mRows[0];
+
+    const confirmedDate = meetingDate || originalMsg.meeting_date || 'Upcoming';
+
+    // Update original message
+    await pool.query(
+      `UPDATE messages
+       SET is_read = true,
+           body = body || E'\\n\\n[Confirmed by Teacher: ' || $1 || E']'
+       WHERE id = $2`,
+      [confirmedDate, messageId]
+    );
+
+    // Insert confirmation reply message to parent
+    const replyId = `MSG_${Date.now().toString().slice(-6)}`;
+    const teacherName = req.user.name || 'Teacher';
+    const teacherId = req.user.teacherId || 'T01';
+
+    const confirmationBody = `Consultation Confirmed: Your meeting request for ${confirmedDate} has been confirmed by ${teacherName}.${replyNote ? ' Note: ' + replyNote : ''}`;
+
+    const { rows: replyRows } = await pool.query(
+      `INSERT INTO messages (id, sender_role, sender_id, sender_name, recipient_role, recipient_id, recipient_name, subject, body, meeting_date)
+       VALUES ($1, 'teacher', $2, $3, 'parent', $4, $5, 'Consultation Confirmed', $6, $7)
+       RETURNING *`,
+      [replyId, teacherId, teacherName, originalMsg.sender_id, originalMsg.sender_name, confirmationBody, confirmedDate]
+    );
+
+    await auditLog(req.user.username, req.user.role, 'CONFIRM_CONSULTATION', 'messages', messageId, { confirmedDate });
+    res.json({ success: true, confirmation: replyRows[0] });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

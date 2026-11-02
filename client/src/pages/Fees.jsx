@@ -25,6 +25,7 @@ export default function Fees() {
 
   const [modal, setModal] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  const [clearanceData, setClearanceData] = useState(null);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
 
@@ -301,6 +302,22 @@ export default function Fees() {
                               🧾 Receipt
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className="btn sm"
+                            title="Generate official exam clearance slip"
+                            onClick={() => setClearanceData({
+                              id: r.student,
+                              name: studentName(r.student),
+                              term: r.term,
+                              amount: r.amount,
+                              paid: r.paid,
+                              balance: bal,
+                              status: r.status
+                            })}
+                          >
+                            📄 Clearance
+                          </button>
                           {write && (
                             <>
                               <button
@@ -544,6 +561,70 @@ export default function Fees() {
             <div className="acts" style={{ marginTop: 14 }}>
               <button type="button" className="btn pr" onClick={handlePrintReceipt}>🖨 Print / Download receipt</button>
               <button type="button" className="btn" onClick={() => setReceiptData(null)}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Official Clearance Certificate Modal */}
+      {clearanceData && (
+        <Modal title="Student Financial Clearance & Exam Eligibility" onClose={() => setClearanceData(null)}>
+          <div className="print-area" style={{ padding: 16 }}>
+            <div style={{ textAlign: 'center', marginBottom: 16, borderBottom: '2px solid var(--bd)', paddingBottom: 12 }}>
+              <h2 style={{ margin: 0 }}>{settings?.school || 'ABC Academy'}</h2>
+              <div className="muted">Official Financial Clearance & Examination Eligibility Certificate</div>
+              <small className="muted">Academic Year {settings?.year || '2026/27'} · {clearanceData.term}</small>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 16 }}>
+              <div><strong>Student Name:</strong> {clearanceData.name}</div>
+              <div><strong>Student ID:</strong> {clearanceData.id}</div>
+              <div><strong>Billing Term:</strong> {clearanceData.term}</div>
+              <div><strong>Account Status:</strong> <Badge v={clearanceData.status} /></div>
+            </div>
+
+            <div style={{ background: 'var(--sf)', padding: 14, borderRadius: 8, border: '1px solid var(--bd)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--bd)' }}>
+                <span>Total Term Tuition:</span>
+                <strong>{money(clearanceData.amount)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--bd)' }}>
+                <span>Total Paid to Date:</span>
+                <strong style={{ color: '#059669' }}>{money(clearanceData.paid)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '1.05rem' }}>
+                <span>Outstanding Balance:</span>
+                <strong style={{ color: clearanceData.balance > 0 ? 'var(--ac)' : '#059669' }}>
+                  {money(clearanceData.balance)}
+                </strong>
+              </div>
+            </div>
+
+            <div style={{
+              textAlign: 'center',
+              padding: 16,
+              borderRadius: 8,
+              background: clearanceData.balance <= 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+              border: `2px dashed ${clearanceData.balance <= 0 ? '#059669' : '#dc2626'}`,
+              marginBottom: 16
+            }}>
+              <h3 style={{ margin: 0, color: clearanceData.balance <= 0 ? '#059669' : '#dc2626' }}>
+                {clearanceData.balance <= 0 ? '✓ CLEARED FOR TERM EXAMINATIONS' : '⚠️ OUTSTANDING BALANCE — PAYMENT REQUIRED'}
+              </h3>
+              <p style={{ margin: '6px 0 0', fontSize: 13 }}>
+                {clearanceData.balance <= 0
+                  ? 'All term fees and charges are fully settled. The student is authorized to sit for all scheduled examinations.'
+                  : 'Please complete payment of the outstanding balance prior to the start of the examination period.'}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, fontSize: 12, color: 'var(--mu)', borderTop: '1px solid var(--bd)', paddingTop: 10 }}>
+              <span>Certified on: {new Date().toLocaleDateString()}</span>
+              <span>Finance Office & Registrar Seal</span>
+            </div>
+
+            <div className="acts" style={{ marginTop: 16 }}>
+              <button type="button" className="btn pr" onClick={() => window.print()}>🖨️ Print Clearance Slip</button>
+              <button type="button" className="btn" onClick={() => setClearanceData(null)}>Close</button>
             </div>
           </div>
         </Modal>
