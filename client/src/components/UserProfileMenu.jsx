@@ -433,6 +433,10 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
               Manage your authentication credentials and session workstation security.
             </p>
 
+            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '3px solid #3b82f6', borderRadius: 6, padding: '8px 10px', marginBottom: 12, fontSize: 12 }}>
+              <strong>🔒 Note:</strong> If you forgot your current password, only the <strong>School Administrator</strong> can reset it. Please contact the administrative office.
+            </div>
+
             <div className="fld">
               <label htmlFor="cur_pwd">Current Password *</label>
               <input

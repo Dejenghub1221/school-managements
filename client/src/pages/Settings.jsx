@@ -28,6 +28,13 @@ export default function Settings() {
   const [accountModal, setAccountModal] = useState(false);
   const [linkParentModal, setLinkParentModal] = useState(false);
 
+  // Password reset state (Admin only)
+  const [passwordRequests, setPasswordRequests] = useState([]);
+  const [resetModalUser, setResetModalUser] = useState(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('school123');
+  const [showResetPwd, setShowResetPwd] = useState(false);
+  const [resetSuccessModal, setResetSuccessModal] = useState(null);
+
   // Teaching assignments & leave state
   const [teachingAssignments, setTeachingAssignments] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -51,16 +58,18 @@ export default function Settings() {
 
   const loadAccounts = async () => {
     try {
-      const [u, s, p, t] = await Promise.all([
+      const [u, s, p, t, pr] = await Promise.all([
         api('/admin-actions/accounts'),
         api('/students'),
         api('/parents'),
-        api('/teachers')
+        api('/teachers'),
+        api('/admin-actions/password-requests').catch(() => [])
       ]);
       setAccounts(u);
       setStudents(s);
       setParents(p);
       setTeachers(t);
+      setPasswordRequests(pr || []);
     } catch {}
   };
 
@@ -149,6 +158,50 @@ export default function Settings() {
     } catch (x) {
       setToast(x.message);
     }
+  };
+
+  const handleResetPasswordSubmit = async e => {
+    e.preventDefault();
+    if (!resetModalUser) return;
+    setBusy(true);
+    try {
+      const pwdToSet = resetPasswordInput.trim() || 'school123';
+      const res = await api('/admin-actions/reset-password', {
+        method: 'POST',
+        body: {
+          username: resetModalUser.username,
+          userId: resetModalUser.id,
+          newPassword: pwdToSet,
+          requestId: resetModalUser.requestId || null,
+          reason: resetModalUser.reason || 'Admin manual reset'
+        }
+      });
+      setToast(res.message);
+      setResetSuccessModal({
+        username: resetModalUser.username,
+        name: resetModalUser.name,
+        role: resetModalUser.role,
+        newPassword: pwdToSet,
+        passwordStatus: res.user?.passwordStatus || 'Reset by Admin',
+        passwordResetBy: res.user?.passwordResetBy || user?.username || 'admin',
+        passwordResetAt: res.user?.passwordResetAt || new Date().toISOString()
+      });
+      setResetModalUser(null);
+      loadAccounts();
+    } catch (x) {
+      setToast(x.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let pass = 'Sch!';
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setResetPasswordInput(pass);
   };
 
   const handleLeaveRequest = async e => {
@@ -299,8 +352,63 @@ export default function Settings() {
       {/* Accounts & Linking Tab (Admin - Page 3) */}
       {tab === 'accounts' && isAdmin && (
         <div>
+          {/* Pending Password Reset Requests (from Forgot Password submissions) */}
+          {passwordRequests.filter(r => r.status === 'Pending').length > 0 && (
+            <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid #ef4444', background: 'var(--hv)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>⚠️</span> Pending Password Reset Requests ({passwordRequests.filter(r => r.status === 'Pending').length})
+                </h3>
+                <small className="muted">Users who reported forgotten passwords requiring Administrator action</small>
+              </div>
+              <div className="tw">
+                <table className="rt">
+                  <thead>
+                    <tr>
+                      <th>Username</th><th>Name</th><th>Role</th><th>Contact Info</th><th>Reason</th><th>Requested</th><th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {passwordRequests.filter(r => r.status === 'Pending').map(req => (
+                      <tr key={req.id}>
+                        <td data-l="Username"><strong>{req.username}</strong></td>
+                        <td data-l="Name">{req.name}</td>
+                        <td data-l="Role"><Badge v="Suspended" /> {req.role}</td>
+                        <td data-l="Contact Info">{req.contact_info || '—'}</td>
+                        <td data-l="Reason" style={{ maxWidth: 180, fontSize: '0.85rem' }}>{req.reason}</td>
+                        <td data-l="Requested">{new Date(req.requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</td>
+                        <td data-l="Action">
+                          <button
+                            type="button"
+                            className="btn sm pr"
+                            onClick={() => {
+                              setResetModalUser({
+                                username: req.username,
+                                name: req.name,
+                                role: req.role,
+                                requestId: req.id,
+                                reason: `Resolving password reset request #${req.id}`
+                              });
+                              setResetPasswordInput('school123');
+                              setShowResetPwd(false);
+                            }}
+                          >
+                            ⚡ Reset Now
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="head" style={{ marginBottom: 16 }}>
-            <h2>User Accounts</h2>
+            <div>
+              <h2>User Accounts & Security Credentials</h2>
+              <small className="muted">Manage logins, link parents to students, and manually reset user passwords with database audit logging</small>
+            </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn pr" onClick={() => setAccountModal(true)}>
                 ➕ Create account
@@ -315,7 +423,13 @@ export default function Settings() {
             <table className="rt">
               <thead>
                 <tr>
-                  <th>Username</th><th>Name</th><th>Role</th><th>Linked ID</th><th>Created</th>
+                  <th>Username</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Linked ID</th>
+                  <th>Password Status (DB Label)</th>
+                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -325,7 +439,42 @@ export default function Settings() {
                     <td data-l="Name">{acc.name}</td>
                     <td data-l="Role"><Badge v={acc.role === 'admin' ? 'Active' : 'Scheduled'} /> {acc.role}</td>
                     <td data-l="Linked ID">{acc.teacher_id || acc.student_id || acc.parent_id || '—'}</td>
+                    <td data-l="Password Status">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {acc.password_status === 'Reset by Admin' || acc.password_status === 'Reset by Admin (DB)' ? (
+                            <Badge v="Active" />
+                          ) : acc.password_status === 'Reset Requested' ? (
+                            <Badge v="Suspended" />
+                          ) : (
+                            <Badge v="Scheduled" />
+                          )}
+                          <strong style={{ fontSize: '0.85rem' }}>
+                            {acc.password_status || 'Default'}
+                          </strong>
+                        </span>
+                        {acc.password_reset_by && (
+                          <small className="muted" style={{ fontSize: '0.72rem' }}>
+                            By {acc.password_reset_by} {acc.password_reset_at ? `(${new Date(acc.password_reset_at).toLocaleDateString()})` : ''}
+                          </small>
+                        )}
+                      </div>
+                    </td>
                     <td data-l="Created">{new Date(acc.created_at).toLocaleDateString()}</td>
+                    <td data-l="Actions">
+                      <button
+                        type="button"
+                        className="btn sm"
+                        title={`Manually reset password for ${acc.username}`}
+                        onClick={() => {
+                          setResetModalUser(acc);
+                          setResetPasswordInput('school123');
+                          setShowResetPwd(false);
+                        }}
+                      >
+                        🔑 Reset Password
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -694,6 +843,153 @@ export default function Settings() {
               <button className="btn pr">Post announcement</button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Modal: Admin Reset Password */}
+      {resetModalUser && (
+        <Modal
+          title={`🔑 Admin Password Reset — ${resetModalUser.name} (@${resetModalUser.username})`}
+          onClose={() => setResetModalUser(null)}
+        >
+          <form onSubmit={handleResetPasswordSubmit} noValidate>
+            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '4px solid #2563eb', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+              <strong style={{ display: 'block', color: '#1e40af', fontSize: '0.9rem', marginBottom: 4 }}>
+                🔒 Administrative Security Authority
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.84rem', lineHeight: 1.5, color: 'var(--tx)' }}>
+                You are performing a manual password reset as <strong>Administrator</strong>. The database <code>users</code> record will be updated with your administrative signature (<code>password_reset_by: {user?.username || 'admin'}</code>) and labeled as <strong>Reset by Admin</strong>.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div style={{ background: 'var(--hv)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--bd)' }}>
+                <small className="muted" style={{ display: 'block' }}>Target Account</small>
+                <strong>{resetModalUser.username}</strong>
+              </div>
+              <div style={{ background: 'var(--hv)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--bd)' }}>
+                <small className="muted" style={{ display: 'block' }}>Role</small>
+                <strong style={{ textTransform: 'capitalize' }}>{resetModalUser.role}</strong>
+              </div>
+            </div>
+
+            <div className="fld">
+              <label htmlFor="adm_pwd">New Password *</label>
+              <div className="pwd-wrap">
+                <input
+                  id="adm_pwd"
+                  type={showResetPwd ? 'text' : 'password'}
+                  required
+                  minLength={6}
+                  value={resetPasswordInput}
+                  onChange={e => setResetPasswordInput(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                />
+                <button
+                  type="button"
+                  className="pwd-toggle"
+                  title={showResetPwd ? 'Hide password' : 'Show password'}
+                  onClick={() => setShowResetPwd(!showResetPwd)}
+                >
+                  {showResetPwd ? '👁️' : '🙈'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={generateRandomPassword}
+                title="Generate a random secure temporary password"
+              >
+                🎲 Auto-Generate Strong Password
+              </button>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => setResetPasswordInput('school123')}
+                title="Reset to default demo password"
+              >
+                ↺ Set Default (school123)
+              </button>
+            </div>
+
+            <div className="acts">
+              <button type="button" className="btn" onClick={() => setResetModalUser(null)}>
+                Cancel
+              </button>
+              <button className="btn pr" disabled={busy}>
+                {busy ? 'Updating Database…' : 'Confirm & Update Password in DB'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal: Reset Password Success & Credentials Copy */}
+      {resetSuccessModal && (
+        <Modal
+          title="✅ Password Reset Completed"
+          onClose={() => setResetSuccessModal(null)}
+        >
+          <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', padding: '14px', borderRadius: 8, marginBottom: 16 }}>
+            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.95rem' }}>
+              Database Record Updated Successfully!
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>
+              The password for <strong>{resetSuccessModal.name}</strong> has been updated and signed in the database.
+            </p>
+          </div>
+
+          <div style={{ background: 'var(--hv)', border: '1px solid var(--bd)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+            <h4 style={{ margin: '0 0 10px', fontSize: '0.9rem' }}>New Credentials for User:</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.88rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bd)', paddingBottom: 6 }}>
+                <span className="muted">Username:</span>
+                <code><strong>{resetSuccessModal.username}</strong></code>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bd)', paddingBottom: 6 }}>
+                <span className="muted">Temporary Password:</span>
+                <code style={{ fontSize: '1rem', background: 'var(--bg)', padding: '2px 6px', borderRadius: 4, color: 'var(--ac)' }}>
+                  <strong>{resetSuccessModal.newPassword}</strong>
+                </code>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--bd)', paddingBottom: 6 }}>
+                <span className="muted">Database Label:</span>
+                <span className="badge-active" style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                  {resetSuccessModal.passwordStatus}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span className="muted">Reset Signature:</span>
+                <span style={{ fontSize: '0.8rem' }}>
+                  {resetSuccessModal.passwordResetBy} ({new Date(resetSuccessModal.passwordResetAt).toLocaleString()})
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <p style={{ fontSize: '0.84rem', color: 'var(--tx)', marginBottom: 16 }}>
+            Share these temporary credentials with the user in person or via their verified contact channel.
+          </p>
+
+          <div className="acts">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                const text = `School Management Credentials\nUsername: ${resetSuccessModal.username}\nPassword: ${resetSuccessModal.newPassword}\nLogin: http://localhost:5173`;
+                navigator.clipboard?.writeText(text);
+                setToast('Credentials copied to clipboard!');
+              }}
+            >
+              📋 Copy Credentials
+            </button>
+            <button type="button" className="btn pr" onClick={() => setResetSuccessModal(null)}>
+              Done
+            </button>
+          </div>
         </Modal>
       )}
 

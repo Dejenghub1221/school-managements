@@ -1141,6 +1141,10 @@ export default function Profile() {
               </h2>
             </div>
 
+            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '4px solid #3b82f6', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12.5, lineHeight: 1.5 }}>
+              <strong>🔒 Password Policy:</strong> To protect student and academic data, if you have forgotten your password, only the <strong>School Administrator</strong> can reset it manually or in the system database. Contact <code>admin@school.com</code> if you cannot recall your current password.
+            </div>
+
             {pwdFeedback.text && (
               <div style={{
                 padding: '10px 14px',

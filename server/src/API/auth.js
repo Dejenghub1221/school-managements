@@ -52,13 +52,17 @@ export async function login(req, res) {
           emergencyPhone: u.emergency_phone || '',
           teacherId: u.teacher_id,
           studentId: u.student_id,
-          parentId: u.parent_id
+          parentId: u.parent_id,
+          passwordStatus: u.password_status || 'Default',
+          passwordResetBy: u.password_reset_by || null,
+          passwordResetAt: u.password_reset_at || null,
+          mustChangePassword: Boolean(u.must_change_password)
         };
       }
     }
 
-    // Fall back to built-in demo USERS if not found or matched in database
-    if (!user) {
+    // Fall back to built-in demo USERS ONLY if user does not exist in database
+    if (!user && !dbUsers.length) {
       const fallbackUser = USERS.find(u => u.username === username);
       if (fallbackUser && bcrypt.compareSync(String(password || ''), hash)) {
         user = { ...fallbackUser };
@@ -161,5 +165,82 @@ export async function auditLog(actorUsername, actorRole, action, targetEntity, t
     );
   } catch (err) {
     console.error('Audit log failed:', err.message);
+  }
+}
+
+// ── FORGOT PASSWORD REQUEST (Public) ─────────────────────────────────────────
+// Users submit request; only Administrator is authorized to perform password resets
+export async function forgotPassword(req, res) {
+  try {
+    const { username, contactInfo, reason } = req.body || {};
+    if (!username || !username.trim()) {
+      return res.status(400).json({ error: 'Username or Student/Staff ID is required.' });
+    }
+
+    const cleanUsername = username.trim().toLowerCase();
+
+    // Check if user exists in database or demo list
+    const { rows } = await pool.query(
+      'SELECT id, username, role, name, email, phone FROM users WHERE LOWER(username) = $1 LIMIT 1',
+      [cleanUsername]
+    );
+
+    let userInfo = rows[0];
+    if (!userInfo) {
+      const demoUser = USERS.find(u => u.username.toLowerCase() === cleanUsername);
+      if (demoUser) {
+        userInfo = {
+          id: `U_${demoUser.username}`,
+          username: demoUser.username,
+          role: demoUser.role,
+          name: demoUser.name,
+          email: demoUser.email,
+          phone: demoUser.phone
+        };
+      }
+    }
+
+    if (!userInfo) {
+      return res.status(404).json({
+        error: `No user account found matching "${username}". Please verify your username with the school office.`
+      });
+    }
+
+    // Insert into password_reset_requests
+    await pool.query(
+      `INSERT INTO password_reset_requests (username, role, name, contact_info, reason, status)
+       VALUES ($1, $2, $3, $4, $5, 'Pending')`,
+      [
+        userInfo.username,
+        userInfo.role,
+        userInfo.name,
+        contactInfo || userInfo.phone || userInfo.email || 'Not specified',
+        reason || 'User reported forgotten password'
+      ]
+    );
+
+    // Update user status flag in database if row exists
+    await pool.query(
+      `UPDATE users SET password_status = 'Reset Requested', updated_at = NOW() WHERE LOWER(username) = $1`,
+      [cleanUsername]
+    );
+
+    // Audit log
+    await auditLog(
+      userInfo.username,
+      userInfo.role,
+      'FORGOT_PASSWORD_REQUEST',
+      'password_reset_requests',
+      userInfo.username,
+      { contactInfo, reason }
+    );
+
+    res.json({
+      success: true,
+      message: 'Password reset request submitted successfully to the School Administrator. For security reasons, only the Administrator can reset user accounts.',
+      adminNotice: 'Please contact the School Administration office (admin@school.com or +251 91 123 4567) to receive your new temporary credentials.'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 }
