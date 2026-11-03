@@ -537,10 +537,121 @@ router.post('/admin-actions/fee-structure', allow('fees', 'w'), async (req, res,
 router.get('/admin-actions/accounts', allow('settings'), async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.username, u.role, u.name, u.teacher_id, u.student_id, u.parent_id, u.created_at
+      `SELECT u.id, u.username, u.role, u.name, u.email, u.phone, u.teacher_id, u.student_id, u.parent_id,
+              COALESCE(u.password_status, 'Default') AS password_status,
+              u.password_reset_by, u.password_reset_at, u.must_change_password, u.created_at, u.updated_at
        FROM users u ORDER BY u.created_at DESC`
     );
     res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin-actions/password-requests — view pending password reset requests (Admin only)
+router.get('/admin-actions/password-requests', async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied: Only administrators can view password reset requests.' });
+    }
+    const { rows } = await pool.query(
+      `SELECT * FROM password_reset_requests ORDER BY requested_at DESC LIMIT 100`
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin-actions/reset-password — manually reset user password (Admin only)
+router.post('/admin-actions/reset-password', async (req, res, next) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied: Only administrators can reset user passwords.' });
+    }
+
+    const { username, userId, newPassword, requestId, reason } = req.body || {};
+    const target = (username || userId || '').toString().trim().toLowerCase();
+    if (!target) {
+      return res.status(400).json({ error: 'Username or user ID is required.' });
+    }
+
+    const passwordToSet = newPassword && String(newPassword).trim().length >= 6
+      ? String(newPassword).trim()
+      : 'school123';
+
+    const hash = bcrypt.hashSync(passwordToSet, 8);
+    const adminUsername = req.user.username || 'admin';
+
+    // Update user in database
+    const { rows: updated } = await pool.query(
+      `UPDATE users SET
+         password_hash = $1,
+         password_reset_by = $2,
+         password_reset_at = NOW(),
+         password_status = 'Reset by Admin',
+         must_change_password = true,
+         updated_at = NOW()
+       WHERE LOWER(username) = $3 OR LOWER(id) = $3
+       RETURNING id, username, role, name, password_status, password_reset_by, password_reset_at`,
+      [hash, adminUsername, target]
+    );
+
+    if (!updated.length) {
+      return res.status(404).json({ error: `User '${target}' was not found in the users database.` });
+    }
+
+    const u = updated[0];
+
+    // Mark request as resolved if requestId or matching username
+    if (requestId) {
+      await pool.query(
+        `UPDATE password_reset_requests SET
+           status = 'Resolved',
+           resolved_at = NOW(),
+           resolved_by = $1,
+           resolution_note = $2
+         WHERE id = $3`,
+        [adminUsername, reason || 'Password reset by admin', requestId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE password_reset_requests SET
+           status = 'Resolved',
+           resolved_at = NOW(),
+           resolved_by = $1,
+           resolution_note = $2
+         WHERE LOWER(username) = $3 AND status = 'Pending'`,
+        [adminUsername, reason || 'Password reset by admin', u.username.toLowerCase()]
+      );
+    }
+
+    // Audit log
+    await auditLog(
+      adminUsername,
+      'admin',
+      'ADMIN_RESET_PASSWORD',
+      'users',
+      u.id,
+      {
+        targetUsername: u.username,
+        targetRole: u.role,
+        resetBy: adminUsername,
+        manual: true,
+        reason: reason || 'Manual Admin Reset'
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `Password for ${u.name} (@${u.username}) successfully reset.`,
+      user: {
+        id: u.id,
+        username: u.username,
+        role: u.role,
+        name: u.name,
+        passwordStatus: u.password_status,
+        passwordResetBy: u.password_reset_by,
+        passwordResetAt: u.password_reset_at
+      },
+      temporaryPassword: passwordToSet
+    });
   } catch (err) { next(err); }
 });
 

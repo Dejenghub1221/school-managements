@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
@@ -20,6 +21,7 @@ export default function Dashboard() {
     return <TeacherApp />;
   }
 
+  const navigate = useNavigate();
   const { money } = useSettings();
   const family = user?.role === 'student' || user?.role === 'parent';
   const isParent = user?.role === 'parent';
@@ -31,6 +33,7 @@ export default function Dashboard() {
   const [trips, setTrips] = useState([]);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
+  const [pendingPwdCount, setPendingPwdCount] = useState(0);
 
   const loadData = () => {
     setErr('');
@@ -42,6 +45,15 @@ export default function Dashboard() {
         }
       })
       .catch(x => setErr(x.message));
+
+    if (user?.role === 'admin') {
+      api('/admin-actions/password-requests')
+        .then(reqs => {
+          const pending = (reqs || []).filter(r => r.status === 'Pending').length;
+          setPendingPwdCount(pending);
+        })
+        .catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -389,6 +401,38 @@ export default function Dashboard() {
         <h1>Dashboard</h1>
         <span className="muted">{todayStr}</span>
       </div>
+
+      {pendingPwdCount > 0 && (
+        <div style={{
+          background: 'var(--hv, #fef2f2)',
+          border: '1px solid #fecaca',
+          borderLeft: '4px solid #ef4444',
+          borderRadius: 8,
+          padding: '12px 16px',
+          marginBottom: 18,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 10
+        }}>
+          <div>
+            <strong style={{ color: '#b91c1c', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>🔑</span> {pendingPwdCount} Pending User Password Reset Request{pendingPwdCount > 1 ? 's' : ''}
+            </strong>
+            <span style={{ fontSize: '0.85rem', color: 'var(--tx)', marginTop: 2, display: 'block' }}>
+              Users who forgot their credentials require Administrator review and manual password reset.
+            </span>
+          </div>
+          <button
+            type="button"
+            className="btn sm pr"
+            onClick={() => navigate('/settings')}
+          >
+            Review & Reset in Settings →
+          </button>
+        </div>
+      )}
 
       <div className="cards">
         {cards.map(([i, l, v, sub]) => (

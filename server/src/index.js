@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'path';
 import { existsSync } from 'fs';
 
 import { pool } from './db/index.js';
-import { login, auth } from './API/auth.js';
+import { login, forgotPassword, auth } from './API/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { setupCrud } from './routes/crud.js';
 import studentsRouter from './routes/students.js';
@@ -26,6 +26,7 @@ import studentAppRouter from './routes/studentApp.js';
 import teacherAppRouter from './routes/teacherApp.js';
 import { migrateProfileSchema } from './db/migrate_profile.js';
 import { migrateLmsSchema } from './db/migrate_lms.js';
+import { migrateUserSecuritySchema } from './db/migrate_user_security.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -68,6 +69,7 @@ app.get(['/api', '/api/health'], (req, res) => {
   });
 });
 app.post('/api/login', login);
+app.post('/api/forgot-password', forgotPassword);
 setupCrud(app);
 app.use('/api/students', auth, studentsRouter);
 app.use('/api/payments', auth, paymentsRouter);
@@ -116,6 +118,7 @@ pool.query('SELECT 1')
     console.log('✅  Database connected.');
     await migrateProfileSchema();
     await migrateLmsSchema();
+    await migrateUserSecuritySchema();
     app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
   })
   .catch(err => {
