@@ -1141,8 +1141,8 @@ export default function Profile() {
               </h2>
             </div>
 
-            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '4px solid #3b82f6', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12.5, lineHeight: 1.5 }}>
-              <strong>🔒 Password Policy:</strong> To protect student and academic data, if you have forgotten your password, only the <strong>School Administrator</strong> can reset it manually or in the system database. Contact <code>admin@school.com</code> if you cannot recall your current password.
+            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '4px solid #10b981', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, lineHeight: 1.5 }}>
+              <strong>🔑 Change Password:</strong> You can change your password anytime by verifying your current password below. <em>(Only the School Administrator has permission to reset forgotten passwords without the current password).</em>
             </div>
 
             {pwdFeedback.text && (
@@ -1199,7 +1199,7 @@ export default function Profile() {
 
               <div style={{ marginTop: 8 }}>
                 <button type="submit" className="btn pr" disabled={pwdLoading}>
-                  {pwdLoading ? 'Updating Password...' : 'Update Password'}
+                  {pwdLoading ? 'Changing Password...' : 'Change Password'}
                 </button>
               </div>
             </form>

@@ -387,7 +387,15 @@ export default function TeacherApp() {
           <h1 className="parent-portal-title">Teacher Portal</h1>
           <span className="parent-portal-date">{todayStr}</span>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a
+            href="/profile"
+            className="btn sm"
+            style={{ textDecoration: 'none' }}
+            title="Change your teacher account password"
+          >
+            🔑 Change Password
+          </a>
           <button
             type="button"
             className="btn sm pr"

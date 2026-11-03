@@ -213,6 +213,16 @@ export default function ParentApp() {
           <h1 className="parent-portal-title">Family portal</h1>
           <span className="parent-portal-date">{todayStr}</span>
         </div>
+        <div>
+          <a
+            href="/profile"
+            className="btn sm"
+            style={{ textDecoration: 'none' }}
+            title="Change your parent account password"
+          >
+            🔑 Change Password
+          </a>
+        </div>
       </div>
 
       {/* ═════════════════════════════════════════════════════════════════════════ */}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang } from '../context/LangContext.jsx';
+import { api } from '../api/index.js';
 import { Modal } from './Modal.jsx';
 
 export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
@@ -91,7 +92,9 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
 
   const roleLabel = (user?.role && roles[user.role]) || roleName;
 
-  const handlePasswordSubmit = e => {
+  const [pwdBusy, setPwdBusy] = useState(false);
+
+  const handlePasswordSubmit = async e => {
     e.preventDefault();
     if (!pwdForm.current || !pwdForm.newPwd || !pwdForm.confirm) {
       setPwdMsg({ type: 'err', text: 'Please fill in all password fields.' });
@@ -106,12 +109,27 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
       return;
     }
 
-    setPwdMsg({ type: 'ok', text: 'Password updated successfully.' });
-    setTimeout(() => {
-      setActiveModal(null);
-      setPwdMsg({ type: '', text: '' });
-      setPwdForm({ current: '', newPwd: '', confirm: '' });
-    }, 1500);
+    setPwdBusy(true);
+    setPwdMsg({ type: '', text: '' });
+    try {
+      const res = await api('/profile/password', {
+        method: 'PUT',
+        body: {
+          currentPassword: pwdForm.current,
+          newPassword: pwdForm.newPwd
+        }
+      });
+      setPwdMsg({ type: 'ok', text: res.message || 'Password changed successfully!' });
+      setTimeout(() => {
+        setActiveModal(null);
+        setPwdMsg({ type: '', text: '' });
+        setPwdForm({ current: '', newPwd: '', confirm: '' });
+      }, 1500);
+    } catch (err) {
+      setPwdMsg({ type: 'err', text: err.message || 'Failed to change password.' });
+    } finally {
+      setPwdBusy(false);
+    }
   };
 
   return (
@@ -427,14 +445,14 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
 
       {/* 2. Security & Password Modal */}
       {activeModal === 'security' && (
-        <Modal title="Security & Password" onClose={() => { setActiveModal(null); setPwdMsg({ type: '', text: '' }); }}>
+        <Modal title="Change My Password" onClose={() => { setActiveModal(null); setPwdMsg({ type: '', text: '' }); }}>
           <form onSubmit={handlePasswordSubmit} noValidate>
             <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
-              Manage your authentication credentials and session workstation security.
+              Enter your current password and choose a new secure password.
             </p>
 
-            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '3px solid #3b82f6', borderRadius: 6, padding: '8px 10px', marginBottom: 12, fontSize: 12 }}>
-              <strong>🔒 Note:</strong> If you forgot your current password, only the <strong>School Administrator</strong> can reset it. Please contact the administrative office.
+            <div style={{ background: 'var(--hv, #f8fafc)', border: '1px solid var(--bd, #e2e8f0)', borderLeft: '3px solid #10b981', borderRadius: 6, padding: '8px 10px', marginBottom: 12, fontSize: 12 }}>
+              <strong>🔑 Change Password:</strong> You can change your password at any time by confirming your current password below. <em>(Note: If you ever forget your password, only the School Administrator can reset it).</em>
             </div>
 
             <div className="fld">
@@ -481,7 +499,7 @@ export function UserProfileMenu({ onRoleChange, roles = {}, children }) {
 
             <div className="acts" style={{ marginTop: 16 }}>
               <button type="button" className="btn" onClick={() => setActiveModal(null)}>Cancel</button>
-              <button className="btn pr">Save Password</button>
+              <button className="btn pr" disabled={pwdBusy}>{pwdBusy ? 'Changing Password…' : 'Change Password'}</button>
             </div>
           </form>
         </Modal>

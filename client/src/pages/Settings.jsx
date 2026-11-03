@@ -446,6 +446,8 @@ export default function Settings() {
                             <Badge v="Active" />
                           ) : acc.password_status === 'Reset Requested' ? (
                             <Badge v="Suspended" />
+                          ) : acc.password_status === 'Changed by User' ? (
+                            <Badge v="Active" />
                           ) : (
                             <Badge v="Scheduled" />
                           )}
@@ -453,11 +455,15 @@ export default function Settings() {
                             {acc.password_status || 'Default'}
                           </strong>
                         </span>
-                        {acc.password_reset_by && (
+                        {acc.password_reset_by ? (
                           <small className="muted" style={{ fontSize: '0.72rem' }}>
-                            By {acc.password_reset_by} {acc.password_reset_at ? `(${new Date(acc.password_reset_at).toLocaleDateString()})` : ''}
+                            Reset by {acc.password_reset_by} {acc.password_reset_at ? `(${new Date(acc.password_reset_at).toLocaleDateString()})` : ''}
                           </small>
-                        )}
+                        ) : acc.password_status === 'Changed by User' ? (
+                          <small style={{ fontSize: '0.72rem', color: '#16a34a' }}>
+                            ✓ Changed by user
+                          </small>
+                        ) : null}
                       </div>
                     </td>
                     <td data-l="Created">{new Date(acc.created_at).toLocaleDateString()}</td>

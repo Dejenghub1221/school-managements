@@ -516,7 +516,8 @@ router.put('/password', async (req, res, next) => {
       await pool.query(
         `UPDATE users SET
            password_hash = $1,
-           password_status = 'Active',
+           password_status = 'Changed by User',
+           password_reset_by = NULL,
            must_change_password = false,
            updated_at = NOW()
          WHERE id = $2`,
@@ -524,11 +525,12 @@ router.put('/password', async (req, res, next) => {
       );
     } else {
       await pool.query(
-        `INSERT INTO users (id, username, password_hash, role, name, password_status, must_change_password)
-         VALUES ($1, $2, $3, $4, $5, 'Active', false)
+        `INSERT INTO users (id, username, password_hash, role, name, password_status, password_reset_by, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, 'Changed by User', NULL, false)
          ON CONFLICT (username) DO UPDATE SET
            password_hash = $3,
-           password_status = 'Active',
+           password_status = 'Changed by User',
+           password_reset_by = NULL,
            must_change_password = false,
            updated_at = NOW()`,
         [userId, username, newHash, role, req.user.name || username]
