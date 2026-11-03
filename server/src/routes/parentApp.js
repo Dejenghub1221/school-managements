@@ -237,6 +237,24 @@ router.get('/portal', async (req, res, next) => {
       [own]
     );
 
+    // 7. Payment submissions & approval tracker for parent's children
+    const { rows: paymentSubmissions } = await pool.query(
+      `SELECT fps.id, fps.fee_id AS "feeId", fps.student_id AS "studentId",
+              fps.parent_id AS "parentId", fps.parent_name AS "parentName",
+              fps.amount::float AS amount, fps.payment_method AS "paymentMethod",
+              fps.reference_code AS "referenceCode", fps.receipt_filename AS "receiptFileName",
+              fps.receipt_file AS "receiptFile", fps.status, fps.submitted_at AS "submittedAt",
+              fps.reviewed_by AS "reviewedBy", fps.reviewed_at AS "reviewedAt",
+              fps.review_notes AS "reviewNotes",
+              f.term, s.name AS "studentName", s.cls
+       FROM fee_payment_submissions fps
+       JOIN fees f ON f.id = fps.fee_id
+       JOIN students s ON s.id = fps.student_id
+       WHERE fps.student_id = ANY($1) OR fps.parent_id = $2
+       ORDER BY fps.submitted_at DESC LIMIT 30`,
+      [own, req.user.parentId || 'P23']
+    );
+
     res.json({
       parent: {
         id: req.user.parentId || 'P23',
@@ -249,6 +267,7 @@ router.get('/portal', async (req, res, next) => {
       announcements,
       messages,
       absenceReports,
+      paymentSubmissions,
       teachers: teachers.length ? teachers : [
         { id: 'T01', name: 'Ms. Alemu', subject: 'Mathematics', email: 'alemu@school.com', phone: '+251 93 814 6792' },
         { id: 'T02', name: 'Mr. Baye', subject: 'English', email: 'baye@school.com', phone: '+251 96 119 8013' },
@@ -260,20 +279,36 @@ router.get('/portal', async (req, res, next) => {
   }
 });
 
-// ── POST /api/parent-app/pay-fee ──────────────────────────────────────────────
+// ── POST /api/parent-app/pay-fee (Submit payment details & receipt for approval) ──
 router.post('/pay-fee', async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { feeId, studentId, amount, paymentMethod = 'Telebirr', referenceCode } = req.body;
+    const {
+      feeId,
+      studentId,
+      amount,
+      paymentMethod = 'Telebirr',
+      referenceCode,
+      receiptFile,
+      receiptFileName
+    } = req.body || {};
+
     const numAmt = Number(amount);
 
+    // 1. Mandatory Receipt Validation
+    if (!receiptFile || !String(receiptFile).trim()) {
+      return res.status(400).json({
+        error: 'Payment receipt attachment is mandatory. Please upload a clear photo or copy of the bank/wallet payment receipt.'
+      });
+    }
+
     if (!feeId || !studentId || !(numAmt > 0)) {
-      return res.status(400).json({ error: 'Valid feeId, studentId, and amount are required.' });
+      return res.status(400).json({ error: 'Valid feeId, studentId, and payment amount are required.' });
     }
 
     await client.query('BEGIN');
 
-    // 1. Fetch current fee record
+    // 2. Fetch current fee invoice
     const { rows: feeRows } = await client.query('SELECT * FROM fees WHERE id = $1 FOR UPDATE', [feeId]);
     if (!feeRows.length) {
       await client.query('ROLLBACK');
@@ -283,48 +318,70 @@ router.post('/pay-fee', async (req, res, next) => {
     const fee = feeRows[0];
     const totalAmount = Number(fee.amount);
     const prevPaid = Number(fee.paid || 0);
-    const newPaid = Math.min(totalAmount, prevPaid + numAmt);
-    const newStatus = newPaid >= totalAmount ? 'Paid' : 'Partial';
+    const balance = Math.max(0, totalAmount - prevPaid);
 
-    // 2. Update fees table
+    if (numAmt > balance) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: `Submitted amount ($${numAmt}) cannot exceed the remaining balance ($${balance}).`
+      });
+    }
+
+    // 3. Generate Submission ID and reference
+    const submissionId = `FPS_${Date.now().toString().slice(-6)}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const cleanRef = referenceCode || `REF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const cleanFilename = receiptFileName || 'payment_receipt.png';
+
+    // 4. Record payment submission in fee_payment_submissions table with status 'Pending'
     await client.query(
-      'UPDATE fees SET paid = $1, status = $2, date = CURRENT_DATE WHERE id = $3',
-      [newPaid, newStatus, feeId]
+      `INSERT INTO fee_payment_submissions (
+         id, fee_id, student_id, parent_id, parent_name,
+         amount, payment_method, reference_code,
+         receipt_filename, receipt_file, status, submitted_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending', NOW())`,
+      [
+        submissionId,
+        feeId,
+        studentId,
+        req.user.parentId || null,
+        req.user.name || 'Parent',
+        numAmt,
+        paymentMethod,
+        cleanRef,
+        cleanFilename,
+        receiptFile
+      ]
     );
 
-    // 3. Insert into payments table
-    const receiptId = `RCP_${Date.now().toString().slice(-6)}_${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-    const paymentId = `PAY_${Date.now().toString().slice(-6)}`;
-    const today = new Date().toISOString().slice(0, 10);
-
+    // 5. Update fees table status to 'Pending' (PAID AMOUNT IS NOT CHANGED - STAYS PENDING APPROVAL)
     await client.query(
-      `INSERT INTO payments (id, receipt_id, student_id, date, amount)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [paymentId, receiptId, studentId, today, numAmt]
+      `UPDATE fees SET status = 'Pending', pending_submission_id = $1 WHERE id = $2`,
+      [submissionId, feeId]
     );
 
     await client.query('COMMIT');
 
-    await auditLog(req.user.username, req.user.role, 'PARENT_FEE_PAYMENT', 'payments', paymentId, {
-      studentId, feeId, amount: numAmt, paymentMethod, receiptId
+    await auditLog(req.user.username, req.user.role, 'PARENT_SUBMIT_PAYMENT_RECEIPT', 'fee_payment_submissions', submissionId, {
+      studentId, feeId, amount: numAmt, paymentMethod, referenceCode: cleanRef, receiptFileName: cleanFilename
     });
 
     res.json({
       success: true,
-      receipt: {
-        receiptId,
-        paymentId,
-        studentId,
+      status: 'Pending',
+      message: 'Payment details and receipt submitted successfully! The payment status is set to "Pending" until the designated administrator reviews and approves the submission.',
+      submission: {
+        id: submissionId,
         feeId,
+        studentId,
         term: fee.term,
-        amountPaid: numAmt,
+        amountSubmitted: numAmt,
         previousPaid: prevPaid,
-        totalPaid: newPaid,
-        remainingBalance: Math.max(0, totalAmount - newPaid),
-        feeStatus: newStatus,
+        remainingBalance: balance,
+        status: 'Pending',
         paymentMethod,
-        referenceCode: referenceCode || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
-        timestamp: new Date().toISOString()
+        referenceCode: cleanRef,
+        receiptFileName: cleanFilename,
+        submittedAt: new Date().toISOString()
       }
     });
   } catch (err) {

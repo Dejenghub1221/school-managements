@@ -272,6 +272,10 @@ export function setupCrud(app) {
           }
         }
 
+        if (k === 'fees' && req.user.role !== 'admin') {
+          return res.status(403).json({ error: 'Parents and non-admin users cannot modify fee records or set fee status.' });
+        }
+
         const { data, error } = clean(k, { ...fmt(k, row), ...req.body });
         if (error) return res.status(400).json({ error });
 
@@ -341,6 +345,11 @@ export function setupCrud(app) {
     // POST /fees/:id/pay
     if (k === 'fees') {
       r.post('/:id/pay', allow('fees', 'w'), async (req, res, next) => {
+        if (req.user.role === 'parent' || req.user.role !== 'admin') {
+          return res.status(403).json({
+            error: 'Parents cannot mark fees as Paid or use Set Settled. Please submit payment details and receipt for approval in the Parent Portal.'
+          });
+        }
         const client = await pool.connect();
         try {
           await client.query('BEGIN');

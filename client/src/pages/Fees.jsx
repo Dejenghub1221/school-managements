@@ -19,6 +19,11 @@ export default function Fees() {
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [subFilter, setSubFilter] = useState('Pending');
+  const [reviewModal, setReviewModal] = useState(null);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [q, setQ] = useState('');
   const [flt, setFlt] = useState('');
   const [pg, setPg] = useState(1);
@@ -31,16 +36,18 @@ export default function Fees() {
 
   const load = async () => {
     try {
-      const [fData, sData, pData, cData] = await Promise.all([
+      const [fData, sData, pData, cData, subData] = await Promise.all([
         api('/fees'),
         api('/students'),
         api('/payments'),
-        api('/classes-list').catch(() => ['7A','7B','8A','8B','9A','9B'])
+        api('/classes-list').catch(() => ['7A','7B','8A','8B','9A','9B']),
+        isAdmin ? api('/fee-approvals/submissions').catch(() => []) : Promise.resolve([])
       ]);
       setFees(fData);
       setStudents(sData);
       setPayments(pData);
       setClasses(cData || []);
+      setSubmissions(subData || []);
     } catch (x) {
       setErr(x.message);
     }
@@ -48,7 +55,47 @@ export default function Fees() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [isAdmin]);
+
+  const handleApproveSubmission = async (sub) => {
+    setReviewBusy(true);
+    try {
+      const res = await api(`/fee-approvals/submissions/${sub.id}/approve`, {
+        method: 'POST',
+        body: { reviewNotes: reviewNotes || 'Receipt verified and payment confirmed.' }
+      });
+      setToast(res.message || 'Payment submission approved! Fee status updated.');
+      setReviewModal(null);
+      setReviewNotes('');
+      load();
+    } catch (x) {
+      setToast(x.message);
+    } finally {
+      setReviewBusy(false);
+    }
+  };
+
+  const handleRejectSubmission = async (sub) => {
+    if (!reviewNotes.trim()) {
+      setToast('Please provide a note or reason for rejecting this payment submission.');
+      return;
+    }
+    setReviewBusy(true);
+    try {
+      const res = await api(`/fee-approvals/submissions/${sub.id}/reject`, {
+        method: 'POST',
+        body: { reviewNotes }
+      });
+      setToast(res.message || 'Payment submission rejected. Fee status reverted.');
+      setReviewModal(null);
+      setReviewNotes('');
+      load();
+    } catch (x) {
+      setToast(x.message);
+    } finally {
+      setReviewBusy(false);
+    }
+  };
 
   const studentName = id => students.find(s => s.id === id)?.name || id;
 
@@ -69,6 +116,13 @@ export default function Fees() {
   const collectedTotal = (fees || []).reduce((a, b) => a + (Number(b.paid) || 0), 0);
   const outstandingTotal = billedTotal - collectedTotal;
   const unpaidCount = (fees || []).filter(f => f.status === 'Unpaid').length;
+  const pendingApprovalsCount = (submissions || []).filter(s => s.status === 'Pending').length;
+  const filteredSubmissions = (submissions || []).filter(s => {
+    if (subFilter === 'Pending') return s.status === 'Pending';
+    if (subFilter === 'Approved') return s.status === 'Approved';
+    if (subFilter === 'Rejected') return s.status === 'Rejected';
+    return true;
+  });
 
   const handleSaveFee = async e => {
     e.preventDefault();
@@ -196,7 +250,125 @@ export default function Fees() {
           <small>Unpaid accounts</small>
           <b>{unpaidCount}</b>
         </div>
+        {isAdmin && (
+          <div className="card stat" style={{ borderLeft: pendingApprovalsCount > 0 ? '4px solid #f59e0b' : undefined }}>
+            <span className="ico" style={{ color: '#d97706' }}>⏳</span>
+            <small>Pending approvals</small>
+            <b style={{ color: pendingApprovalsCount > 0 ? '#d97706' : undefined }}>{pendingApprovalsCount}</b>
+          </div>
+        )}
       </div>
+
+      {isAdmin && (
+        <div className="card" style={{ margin: '20px 0 24px', borderLeft: pendingApprovalsCount > 0 ? '4px solid #f59e0b' : '4px solid var(--ac)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>🛡️</span> Payment Approval Workflow & Receipt Verification
+                {pendingApprovalsCount > 0 && (
+                  <span style={{ background: '#f59e0b', color: '#fff', fontSize: '0.75rem', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+                    {pendingApprovalsCount} Pending Review
+                  </span>
+                )}
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--mu)' }}>
+                Review parent-submitted payment receipts. Fees remain "Pending" and are not marked as paid until verified and approved.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['Pending', 'All', 'Approved', 'Rejected'].map(st => {
+                const count = st === 'All' ? (submissions || []).length : (submissions || []).filter(s => s.status === st).length;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    className={`btn sm ${subFilter === st ? 'pr' : ''}`}
+                    onClick={() => setSubFilter(st)}
+                  >
+                    {st} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {!filteredSubmissions.length ? (
+            <div style={{ padding: '16px 20px', background: 'var(--hv)', borderRadius: 8, fontSize: '0.88rem', color: 'var(--mu)', textAlign: 'center' }}>
+              No {subFilter !== 'All' ? subFilter.toLowerCase() : ''} payment submissions to display.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--mu)', fontSize: '0.82rem' }}>
+                    <th style={{ padding: '8px 10px' }}>Date</th>
+                    <th style={{ padding: '8px 10px' }}>Student</th>
+                    <th style={{ padding: '8px 10px' }}>Invoice / Term</th>
+                    <th style={{ padding: '8px 10px' }}>Amount</th>
+                    <th style={{ padding: '8px 10px' }}>Method & Ref</th>
+                    <th style={{ padding: '8px 10px' }}>Status</th>
+                    <th style={{ padding: '8px 10px' }}>Receipt & Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSubmissions.map(sub => (
+                    <tr key={sub.id} style={{ borderBottom: '1px solid var(--bd)' }}>
+                      <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>
+                        {new Date(sub.submittedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </td>
+                      <td style={{ padding: '10px 10px' }}>
+                        <strong>{sub.studentName || studentName(sub.studentId)}</strong>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--mu)' }}>Class {sub.cls || '—'} · Parent: {sub.parentName || 'Parent'}</div>
+                      </td>
+                      <td style={{ padding: '10px 10px' }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{sub.feeId}</span>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--mu)' }}>{sub.term || 'Term 1'}</div>
+                      </td>
+                      <td style={{ padding: '10px 10px', fontWeight: 700, color: 'var(--tx)' }}>
+                        {money(sub.amount)}
+                      </td>
+                      <td style={{ padding: '10px 10px' }}>
+                        <div>{sub.paymentMethod}</div>
+                        <small style={{ color: 'var(--mu)', fontFamily: 'monospace' }}>{sub.referenceCode}</small>
+                      </td>
+                      <td style={{ padding: '10px 10px' }}>
+                        <Badge v={sub.status} />
+                      </td>
+                      <td style={{ padding: '10px 10px' }}>
+                        <div style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn sm"
+                            onClick={() => {
+                              setReviewModal(sub);
+                              setReviewNotes(sub.reviewNotes || '');
+                            }}
+                          >
+                            👁️ Review Receipt
+                          </button>
+                          {sub.status === 'Pending' && (
+                            <button
+                              type="button"
+                              className="btn sm pr"
+                              onClick={() => {
+                                setReviewModal(sub);
+                                setReviewNotes('Receipt verified and payment confirmed.');
+                              }}
+                            >
+                              ✓ Approve
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="head">
         <h1>Fees & Payments</h1>
@@ -281,10 +453,40 @@ export default function Fees() {
                       <td data-l="Status"><Badge v={r.status} /></td>
                       <td className="act" data-l="Actions">
                         <div className="act-group">
-                          {bal > 0 && (write || isParent) && (
-                            <button className="btn sm pr" onClick={() => setModal({ type: 'pay', row: r })}>
-                              {isParent ? '💳 Pay online' : 'Pay'}
-                            </button>
+                          {r.status === 'Pending' ? (
+                            isAdmin ? (
+                              <button
+                                type="button"
+                                className="btn sm pr"
+                                onClick={() => {
+                                  const match = (submissions || []).find(s => s.feeId === r.id && s.status === 'Pending') || {
+                                    id: r.pending_submission_id,
+                                    feeId: r.id,
+                                    studentId: r.student,
+                                    term: r.term,
+                                    amount: bal,
+                                    status: 'Pending'
+                                  };
+                                  setReviewModal(match);
+                                  setReviewNotes('Receipt verified and payment confirmed.');
+                                }}
+                              >
+                                ⏳ Review Receipt
+                              </button>
+                            ) : (
+                              <span className="bd y">⏳ Pending Approval</span>
+                            )
+                          ) : (
+                            bal > 0 && !isParent && write && (
+                              <button className="btn sm pr" onClick={() => setModal({ type: 'pay', row: r })}>
+                                Pay
+                              </button>
+                            )
+                          )}
+                          {bal > 0 && isParent && r.status !== 'Pending' && (
+                            <a href="/parent-app" className="btn sm pr">
+                              📤 Pay & Submit Receipt
+                            </a>
                           )}
                           {r.paid > 0 && (
                             <button
@@ -626,6 +828,141 @@ export default function Fees() {
               <button type="button" className="btn pr" onClick={() => window.print()}>🖨️ Print Clearance Slip</button>
               <button type="button" className="btn" onClick={() => setClearanceData(null)}>Close</button>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Approver Receipt Verification & Approval Modal */}
+      {reviewModal && (
+        <Modal
+          title={`Review Payment Submission — ${reviewModal.referenceCode || reviewModal.id}`}
+          onClose={() => setReviewModal(null)}
+        >
+          <div style={{ padding: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <strong>Student:</strong> {reviewModal.studentName || studentName(reviewModal.studentId || reviewModal.student)}
+                {reviewModal.cls ? ` (Class ${reviewModal.cls})` : ''}
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Badge v={reviewModal.status} />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  {reviewModal.status === 'Pending' ? '⏳ Awaiting Decision' : reviewModal.status === 'Approved' ? '✓ Approved' : '✕ Rejected'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--hv)', padding: 12, borderRadius: 8, fontSize: '0.9rem', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Invoice / Term:</span>
+                <strong>{reviewModal.feeId} ({reviewModal.term || 'Term 1'})</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Amount Submitted:</span>
+                <strong style={{ fontSize: '1.1rem', color: 'var(--tx)' }}>{money(reviewModal.amount)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Payment Method:</span>
+                <strong>{reviewModal.paymentMethod || 'Telebirr'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Reference / Transaction Code:</span>
+                <strong style={{ fontFamily: 'monospace' }}>{reviewModal.referenceCode || '—'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Submitted By:</span>
+                <span>{reviewModal.parentName || 'Parent'} ({reviewModal.submittedAt ? new Date(reviewModal.submittedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently'})</span>
+              </div>
+              {reviewModal.reviewedBy && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--bd)', paddingTop: 6 }}>
+                  <span>Reviewed By:</span>
+                  <strong>{reviewModal.reviewedBy} ({new Date(reviewModal.reviewedAt).toLocaleDateString()})</strong>
+                </div>
+              )}
+            </div>
+
+            {/* Receipt Preview */}
+            <h4 style={{ margin: '14px 0 6px', fontSize: '0.95rem' }}>Attached Payment Receipt Document:</h4>
+            {reviewModal.receiptFile ? (
+              <div style={{ textAlign: 'center', background: 'var(--hv)', padding: 12, borderRadius: 8, border: '1px solid var(--bd)', marginBottom: 14 }}>
+                {reviewModal.receiptFile.startsWith('data:image/') || reviewModal.receiptFile.includes('image') ? (
+                  <img
+                    src={reviewModal.receiptFile}
+                    alt="Receipt"
+                    style={{ maxWidth: '100%', maxHeight: 350, objectFit: 'contain', borderRadius: 6 }}
+                  />
+                ) : (
+                  <div style={{ padding: 18 }}>
+                    <div style={{ fontSize: '2.5rem' }}>📄</div>
+                    <p style={{ margin: '8px 0', fontWeight: 600 }}>{reviewModal.receiptFileName || 'receipt.pdf'}</p>
+                  </div>
+                )}
+                <div style={{ marginTop: 10 }}>
+                  <a
+                    href={reviewModal.receiptFile}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={reviewModal.receiptFileName || 'payment_receipt'}
+                    className="btn sm"
+                  >
+                    📥 Download Original Receipt
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 16, background: 'var(--hv)', borderRadius: 8, color: 'var(--mu)', textAlign: 'center', marginBottom: 14 }}>
+                No receipt file preview available.
+              </div>
+            )}
+
+            {/* Review Notes */}
+            <div className="fld" style={{ marginBottom: 14 }}>
+              <label htmlFor="review_notes">Approver Verification Notes / Rejection Reason</label>
+              <textarea
+                id="review_notes"
+                rows={2}
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+                placeholder="Enter notes for this approval or reason for rejection (shared with parent)..."
+              />
+            </div>
+
+            {reviewModal.status === 'Pending' ? (
+              <div className="acts" style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setReviewModal(null)}
+                  disabled={reviewBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                  onClick={() => handleRejectSubmission(reviewModal)}
+                  disabled={reviewBusy}
+                >
+                  {reviewBusy ? 'Processing...' : '✕ Reject Submission'}
+                </button>
+                <button
+                  type="button"
+                  className="btn pr"
+                  style={{ flex: 1 }}
+                  onClick={() => handleApproveSubmission(reviewModal)}
+                  disabled={reviewBusy}
+                >
+                  {reviewBusy ? 'Processing...' : `✓ Verify & Approve Payment (${money(reviewModal.amount)})`}
+                </button>
+              </div>
+            ) : (
+              <div className="acts">
+                <button type="button" className="btn" style={{ width: '100%' }} onClick={() => setReviewModal(null)}>
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </Modal>
       )}

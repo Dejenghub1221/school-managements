@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { pool, CLS } from '../db/index.js';
+import { pool, CLS, feeStatus } from '../db/index.js';
 import { allow, ownStudentIds, myClasses, auditLog } from '../API/auth.js';
 
 const router = express.Router();
@@ -742,6 +742,248 @@ router.post('/admin-actions/teaching-assignments', allow('teachers', 'w'), async
     await auditLog(req.user.username, req.user.role, 'ASSIGN_TEACHER', 'teaching_assignments', id, { teacherId, cls, subject });
     res.json(rows[0]);
   } catch (err) { next(err); }
+});
+
+// ── Fee Payment Submissions & Approval Workflow ─────────────────────────────
+// GET /api/fee-approvals/submissions — list payment submissions for approver review
+router.get('/fee-approvals/submissions', async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only authorized approvers can review fee payment submissions.' });
+    }
+
+    const { status, feeId } = req.query;
+    const params = [];
+    const conditions = [];
+
+    if (status) {
+      params.push(status);
+      conditions.push(`fps.status = $${params.length}`);
+    }
+    if (feeId) {
+      params.push(feeId);
+      conditions.push(`fps.fee_id = $${params.length}`);
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const { rows } = await pool.query(
+      `SELECT fps.id, fps.fee_id AS "feeId", fps.student_id AS "studentId",
+              fps.parent_id AS "parentId", fps.parent_name AS "parentName",
+              fps.amount::float AS amount, fps.payment_method AS "paymentMethod",
+              fps.reference_code AS "referenceCode", fps.receipt_filename AS "receiptFileName",
+              fps.receipt_file AS "receiptFile", fps.status, fps.submitted_at AS "submittedAt",
+              fps.reviewed_by AS "reviewedBy", fps.reviewed_at AS "reviewedAt",
+              fps.review_notes AS "reviewNotes",
+              s.name AS "studentName", s.cls,
+              f.term, f.amount::float AS "feeAmount", f.paid::float AS "feePaid", f.status AS "feeStatus"
+       FROM fee_payment_submissions fps
+       LEFT JOIN students s ON s.id = fps.student_id
+       LEFT JOIN fees f ON f.id = fps.fee_id
+       ${whereClause}
+       ORDER BY
+         CASE WHEN fps.status = 'Pending' THEN 0 ELSE 1 END,
+         fps.submitted_at DESC`,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+// GET /api/fee-approvals/submissions/:id — get submission details including receipt
+router.get('/fee-approvals/submissions/:id', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT fps.id, fps.fee_id AS "feeId", fps.student_id AS "studentId",
+              fps.parent_id AS "parentId", fps.parent_name AS "parentName",
+              fps.amount::float AS amount, fps.payment_method AS "paymentMethod",
+              fps.reference_code AS "referenceCode", fps.receipt_filename AS "receiptFileName",
+              fps.receipt_file AS "receiptFile", fps.status, fps.submitted_at AS "submittedAt",
+              fps.reviewed_by AS "reviewedBy", fps.reviewed_at AS "reviewedAt",
+              fps.review_notes AS "reviewNotes",
+              s.name AS "studentName", s.cls,
+              f.term, f.amount::float AS "feeAmount", f.paid::float AS "feePaid", f.status AS "feeStatus"
+       FROM fee_payment_submissions fps
+       LEFT JOIN students s ON s.id = fps.student_id
+       LEFT JOIN fees f ON f.id = fps.fee_id
+       WHERE fps.id = $1`,
+      [req.params.id]
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'Payment submission not found.' });
+
+    // Ensure parents can only view their own submissions
+    if (req.user.role === 'parent' && rows[0].parentId && rows[0].parentId !== req.user.parentId) {
+      return res.status(403).json({ error: 'Access denied.' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) { next(err); }
+});
+
+// POST /api/fee-approvals/submissions/:id/approve — approve submission and update fee to Paid/Partial
+router.post('/fee-approvals/submissions/:id/approve', async (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only authorized approvers can verify and approve fee payments.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Lock submission
+    const { rows: subRows } = await client.query(
+      'SELECT * FROM fee_payment_submissions WHERE id = $1 FOR UPDATE',
+      [req.params.id]
+    );
+    if (!subRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Payment submission not found.' });
+    }
+
+    const submission = subRows[0];
+    if (submission.status !== 'Pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `This submission has already been ${submission.status.toLowerCase()}.` });
+    }
+
+    // 2. Lock associated fee
+    const { rows: feeRows } = await client.query(
+      'SELECT * FROM fees WHERE id = $1 FOR UPDATE',
+      [submission.fee_id]
+    );
+    if (!feeRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Associated fee invoice record not found.' });
+    }
+
+    const fee = feeRows[0];
+    const prevPaid = Number(fee.paid || 0);
+    const subAmt = Number(submission.amount || 0);
+    const newPaid = prevPaid + subAmt;
+    const newStatus = feeStatus(Number(fee.amount), newPaid);
+
+    // 3. Update fee invoice with new paid amount, status ('Paid' or 'Partial'), clear pending pointer
+    const { rows: updatedFees } = await client.query(
+      `UPDATE fees SET paid = $1, status = $2, pending_submission_id = NULL WHERE id = $3 RETURNING *`,
+      [newPaid, newStatus, fee.id]
+    );
+
+    // 4. Update submission status to 'Approved'
+    const reviewerName = req.user.name || req.user.username || 'Administrator';
+    const reviewNotes = req.body.reviewNotes || 'Receipt verified and payment confirmed.';
+    const { rows: updatedSubs } = await client.query(
+      `UPDATE fee_payment_submissions
+       SET status = 'Approved', reviewed_by = $1, reviewed_at = NOW(), review_notes = $2
+       WHERE id = $3 RETURNING *`,
+      [reviewerName, reviewNotes, submission.id]
+    );
+
+    // 5. Generate and insert official payment record with receipt ID
+    const receiptId = `RCP_${Date.now().toString().slice(-6)}`;
+    const today = new Date().toISOString().slice(0, 10);
+    await client.query(
+      `INSERT INTO payments (id, receipt_id, student_id, date, amount) VALUES ($1, $2, $3, $4, $5)`,
+      [fee.id, receiptId, fee.student, today, subAmt]
+    );
+
+    await client.query('COMMIT');
+
+    await auditLog(req.user.username, req.user.role, 'APPROVE_FEE_PAYMENT', 'fee_payment_submissions', submission.id, {
+      feeId: fee.id, studentId: fee.student, amount: subAmt, newPaid, newStatus, receiptId
+    });
+
+    res.json({
+      success: true,
+      message: `Payment of $${subAmt} approved successfully. Fee status is now "${newStatus}".`,
+      submission: updatedSubs[0],
+      fee: updatedFees[0],
+      receiptId
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/fee-approvals/submissions/:id/reject — reject submission and revert fee status
+router.post('/fee-approvals/submissions/:id/reject', async (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only authorized approvers can reject fee payment submissions.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Lock submission
+    const { rows: subRows } = await client.query(
+      'SELECT * FROM fee_payment_submissions WHERE id = $1 FOR UPDATE',
+      [req.params.id]
+    );
+    if (!subRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Payment submission not found.' });
+    }
+
+    const submission = subRows[0];
+    if (submission.status !== 'Pending') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `This submission has already been ${submission.status.toLowerCase()}.` });
+    }
+
+    // 2. Lock associated fee
+    const { rows: feeRows } = await client.query(
+      'SELECT * FROM fees WHERE id = $1 FOR UPDATE',
+      [submission.fee_id]
+    );
+    if (!feeRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Associated fee invoice record not found.' });
+    }
+
+    const fee = feeRows[0];
+    const currentPaid = Number(fee.paid || 0);
+    // Revert status based on current verified paid amount
+    const revertedStatus = feeStatus(Number(fee.amount), currentPaid);
+
+    // 3. Revert fee status and clear pending pointer
+    const { rows: updatedFees } = await client.query(
+      `UPDATE fees SET status = $1, pending_submission_id = NULL WHERE id = $2 RETURNING *`,
+      [revertedStatus, fee.id]
+    );
+
+    // 4. Update submission to 'Rejected'
+    const reviewerName = req.user.name || req.user.username || 'Administrator';
+    const reviewNotes = req.body.reviewNotes || 'Payment receipt could not be verified.';
+    const { rows: updatedSubs } = await client.query(
+      `UPDATE fee_payment_submissions
+       SET status = 'Rejected', reviewed_by = $1, reviewed_at = NOW(), review_notes = $2
+       WHERE id = $3 RETURNING *`,
+      [reviewerName, reviewNotes, submission.id]
+    );
+
+    await client.query('COMMIT');
+
+    await auditLog(req.user.username, req.user.role, 'REJECT_FEE_PAYMENT', 'fee_payment_submissions', submission.id, {
+      feeId: fee.id, reason: reviewNotes, revertedStatus
+    });
+
+    res.json({
+      success: true,
+      message: `Payment submission rejected. Fee status reverted to "${revertedStatus}".`,
+      submission: updatedSubs[0],
+      fee: updatedFees[0]
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 export default router;

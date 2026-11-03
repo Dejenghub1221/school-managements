@@ -37,6 +37,12 @@ export default function ParentApp() {
   const [payAmount, setPayAmount] = useState('');
   const [payBusy, setPayBusy] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  const [payReceiptFile, setPayReceiptFile] = useState(null);
+  const [payReceiptFileName, setPayReceiptFileName] = useState('');
+  const [payReceiptPreview, setPayReceiptPreview] = useState(null);
+  const [payRefCode, setPayRefCode] = useState('');
+  const [viewSubmissionModal, setViewSubmissionModal] = useState(null);
+  const [submittedSuccessModal, setSubmittedSuccessModal] = useState(null);
 
   const [messageModal, setMessageModal] = useState(false);
   const [msgRecipient, setMsgRecipient] = useState('');
@@ -80,13 +86,46 @@ export default function ParentApp() {
     return portal.children.find(c => c.id === activeChildId) || portal.children[0];
   }, [portal, activeChildId]);
 
-  // Handle Pay Online
+  // Submissions filtered for active child
+  const childSubmissions = useMemo(() => {
+    if (!portal?.paymentSubmissions?.length || !selectedChild) return [];
+    return portal.paymentSubmissions.filter(s => s.studentId === selectedChild.id);
+  }, [portal, selectedChild]);
+
+  // Handle Receipt File Upload
+  const handleReceiptUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      setToast('Receipt file size exceeds 8MB limit. Please choose a smaller file.');
+      return;
+    }
+    setPayReceiptFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result;
+      setPayReceiptFile(dataUrl);
+      if (file.type.startsWith('image/')) {
+        setPayReceiptPreview(dataUrl);
+      } else {
+        setPayReceiptPreview(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle Submit Payment Details & Receipt for Approval
   const handlePayFee = async (e) => {
     e.preventDefault();
     if (!payModal || !selectedChild) return;
     const amount = Number(payAmount) || (payModal.amount - payModal.paid);
     if (amount <= 0) {
       setToast('Please enter a valid amount.');
+      return;
+    }
+
+    if (!payReceiptFile) {
+      setToast('Payment receipt is mandatory. Please attach a photo or copy of your receipt before submitting.');
       return;
     }
 
@@ -98,13 +137,20 @@ export default function ParentApp() {
           feeId: payModal.id,
           studentId: selectedChild.id,
           amount,
-          paymentMethod: payMethod
+          paymentMethod: payMethod,
+          referenceCode: payRefCode || undefined,
+          receiptFile: payReceiptFile,
+          receiptFileName: payReceiptFileName || 'receipt.png'
         }
       });
-      setReceiptData(res.receipt);
       setPayModal(null);
       setPayAmount('');
-      setToast('Payment recorded successfully! 🎉 Digital receipt generated.');
+      setPayReceiptFile(null);
+      setPayReceiptPreview(null);
+      setPayReceiptFileName('');
+      setPayRefCode('');
+      setSubmittedSuccessModal(res.submission);
+      setToast('Payment details & receipt submitted for approval! Status: Pending.');
       loadPortal();
     } catch (e) {
       setToast(e.message);
@@ -635,40 +681,137 @@ export default function ParentApp() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedChild.fees?.invoices || []).map((fee) => (
-                      <tr key={fee.id} style={{ borderBottom: '1px solid var(--bd)' }}>
-                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{fee.id}</td>
-                        <td style={{ padding: '10px 12px' }}>{fee.term}</td>
-                        <td style={{ padding: '10px 12px', fontWeight: 600 }}>{money(fee.amount)}</td>
-                        <td style={{ padding: '10px 12px', color: '#059669' }}>{money(fee.paid)}</td>
-                        <td style={{ padding: '10px 12px', fontWeight: 700, color: fee.balance > 0 ? 'var(--ac)' : 'var(--mu)' }}>
-                          {money(fee.balance)}
-                        </td>
-                        <td style={{ padding: '10px 12px' }}>
-                          <Badge v={fee.status === 'Paid' ? 'Paid' : fee.status === 'Partial' ? 'Active' : 'Unpaid'} />
-                        </td>
-                        <td style={{ padding: '10px 12px' }}>
-                          {fee.balance > 0 ? (
-                            <button
-                              type="button"
-                              className="btn sm pr"
-                              onClick={() => {
-                                setPayModal(fee);
-                                setPayAmount(String(fee.balance));
-                              }}
-                            >
-                              💳 Pay Online
-                            </button>
-                          ) : (
-                            <span style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 600 }}>
-                              ✓ Settled
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {(selectedChild.fees?.invoices || []).map((fee) => {
+                      const isPending = fee.status === 'Pending';
+                      const isPaid = fee.status === 'Paid' || fee.balance <= 0;
+                      return (
+                        <tr key={fee.id} style={{ borderBottom: '1px solid var(--bd)' }}>
+                          <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{fee.id}</td>
+                          <td style={{ padding: '10px 12px' }}>{fee.term}</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 600 }}>{money(fee.amount)}</td>
+                          <td style={{ padding: '10px 12px', color: '#059669' }}>{money(fee.paid)}</td>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: fee.balance > 0 ? 'var(--ac)' : 'var(--mu)' }}>
+                            {money(fee.balance)}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            <Badge v={fee.status} />
+                          </td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {isPending ? (
+                              <span style={{ fontSize: '0.82rem', color: '#d97706', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(245, 158, 11, 0.12)', padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                                ⏳ Pending Approval
+                              </span>
+                            ) : isPaid ? (
+                              <span style={{ fontSize: '0.85rem', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                ✓ Settled
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn sm pr"
+                                onClick={() => {
+                                  setPayModal(fee);
+                                  setPayAmount(String(fee.balance));
+                                  setPayReceiptFile(null);
+                                  setPayReceiptPreview(null);
+                                  setPayReceiptFileName('');
+                                  setPayRefCode('');
+                                }}
+                              >
+                                📤 Pay & Attach Receipt
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* ── Submissions & Receipt Verification History ── */}
+              <div style={{ marginTop: 24, paddingTop: 18, borderTop: '1px dashed var(--bd)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span>📑</span> Submitted Payment Receipts & Approval Status
+                    </h4>
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--mu)' }}>
+                      Track the verification and approval progress for payment receipts submitted for {selectedChild.name}.
+                    </p>
+                  </div>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--mu)', background: 'var(--hv)', padding: '4px 10px', borderRadius: 6 }}>
+                    {childSubmissions.length} submission{childSubmissions.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                {!childSubmissions.length ? (
+                  <div style={{ padding: '16px 20px', background: 'var(--hv)', borderRadius: 8, fontSize: '0.88rem', color: 'var(--mu)' }}>
+                    No payment submissions made yet for this student. When you submit payment details and upload your receipt, its verification status will appear here.
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '2px solid var(--bd)', color: 'var(--mu)', fontSize: '0.82rem' }}>
+                          <th style={{ padding: '8px 10px' }}>Date Submitted</th>
+                          <th style={{ padding: '8px 10px' }}>Invoice ID</th>
+                          <th style={{ padding: '8px 10px' }}>Term</th>
+                          <th style={{ padding: '8px 10px' }}>Amount Submitted</th>
+                          <th style={{ padding: '8px 10px' }}>Method & Reference</th>
+                          <th style={{ padding: '8px 10px' }}>Approval Status</th>
+                          <th style={{ padding: '8px 10px' }}>Receipt & Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {childSubmissions.map((sub) => (
+                          <tr key={sub.id} style={{ borderBottom: '1px solid var(--bd)' }}>
+                            <td style={{ padding: '10px 10px', whiteSpace: 'nowrap' }}>
+                              {new Date(sub.submittedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </td>
+                            <td style={{ padding: '10px 10px', fontFamily: 'monospace', fontWeight: 600 }}>
+                              {sub.feeId}
+                            </td>
+                            <td style={{ padding: '10px 10px' }}>
+                              {sub.term || 'Term 1'}
+                            </td>
+                            <td style={{ padding: '10px 10px', fontWeight: 700, color: 'var(--tx)' }}>
+                              {money(sub.amount)}
+                            </td>
+                            <td style={{ padding: '10px 10px' }}>
+                              <div>{sub.paymentMethod}</div>
+                              <small style={{ color: 'var(--mu)', fontFamily: 'monospace' }}>{sub.referenceCode}</small>
+                            </td>
+                            <td style={{ padding: '10px 10px' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Badge v={sub.status} />
+                                {sub.status === 'Pending' && (
+                                  <small style={{ color: '#d97706', fontWeight: 600 }}>Awaiting Review</small>
+                                )}
+                                {sub.status === 'Approved' && (
+                                  <small style={{ color: '#059669', fontWeight: 600 }}>✓ Verified</small>
+                                )}
+                                {sub.status === 'Rejected' && (
+                                  <small style={{ color: '#dc2626', fontWeight: 600 }}>Declined</small>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ padding: '10px 10px' }}>
+                              <button
+                                type="button"
+                                className="btn sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                onClick={() => setViewSubmissionModal(sub)}
+                              >
+                                👁️ View Receipt
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -985,9 +1128,9 @@ export default function ParentApp() {
 
       {/* Online Fee Payment Modal */}
       {payModal && (
-        <Modal title={`Pay Fee Online — ${payModal.term}`} onClose={() => setPayModal(null)}>
+        <Modal title={`Submit Fee Payment & Receipt for Approval — ${payModal.term}`} onClose={() => setPayModal(null)}>
           <form onSubmit={handlePayFee}>
-            <div style={{ background: 'var(--hv)', padding: 12, borderRadius: 8, marginBottom: 14 }}>
+            <div style={{ background: 'var(--hv)', padding: 12, borderRadius: 8, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                 <span>Invoice Total:</span>
                 <strong>{money(payModal.amount)}</strong>
@@ -996,6 +1139,10 @@ export default function ParentApp() {
                 <span>Remaining Balance:</span>
                 <strong style={{ color: 'var(--ac)' }}>{money(payModal.balance)}</strong>
               </div>
+            </div>
+
+            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: '0.84rem', color: 'var(--tx)', lineHeight: 1.45 }}>
+              <strong>⏳ Payment Approval Notice:</strong> Submitting your payment receipt sets the status to <strong>“Pending”</strong>. The fee is <strong>not marked as Paid or settled</strong> until the designated finance administrator verifies and approves your receipt.
             </div>
 
             <div className="fld">
@@ -1009,6 +1156,17 @@ export default function ParentApp() {
             </div>
 
             <div className="fld">
+              <label htmlFor="pay_ref">Reference / Transaction Number</label>
+              <input
+                id="pay_ref"
+                type="text"
+                value={payRefCode}
+                onChange={(e) => setPayRefCode(e.target.value)}
+                placeholder="e.g. FT261184920 or Bank Slip No."
+              />
+            </div>
+
+            <div className="fld">
               <label htmlFor="pay_amt">Payment Amount *</label>
               <input
                 id="pay_amt"
@@ -1017,19 +1175,201 @@ export default function ParentApp() {
                 required
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
-                placeholder="Enter amount to pay..."
+                placeholder="Enter amount paid..."
               />
             </div>
 
-            <div className="acts">
+            <div className="fld" style={{ marginTop: 14 }}>
+              <label htmlFor="pay_receipt" style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+                <span>Attach Payment Receipt * (Mandatory)</span>
+                {payReceiptFileName && <span style={{ color: '#059669', fontSize: '0.82rem' }}>✓ File chosen</span>}
+              </label>
+              <input
+                id="pay_receipt"
+                type="file"
+                accept="image/*,application/pdf"
+                required
+                onChange={handleReceiptUpload}
+                style={{ marginTop: 4, width: '100%' }}
+              />
+              <small style={{ color: 'var(--mu)', display: 'block', marginTop: 4 }}>
+                Please attach a clear photo, screenshot, or PDF of your transaction receipt. Required for approver verification. Maximum size: 8MB.
+              </small>
+
+              {payReceiptPreview && (
+                <div style={{ marginTop: 10, textAlign: 'center', background: 'var(--hv)', padding: 8, borderRadius: 8, border: '1px solid var(--bd)' }}>
+                  <img
+                    src={payReceiptPreview}
+                    alt="Receipt Preview"
+                    style={{ maxHeight: 180, maxWidth: '100%', objectFit: 'contain', borderRadius: 4 }}
+                  />
+                  <div style={{ fontSize: '0.78rem', color: 'var(--mu)', marginTop: 4 }}>
+                    Preview: {payReceiptFileName}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="acts" style={{ marginTop: 20 }}>
               <button type="button" className="btn" onClick={() => setPayModal(null)}>
                 Cancel
               </button>
-              <button type="submit" className="btn pr" disabled={payBusy}>
-                {payBusy ? 'Processing...' : `Confirm Payment (${money(Number(payAmount) || 0)}) ➔`}
+              <button
+                type="submit"
+                className="btn pr"
+                disabled={payBusy || !payReceiptFile || !(Number(payAmount) > 0)}
+                title={!payReceiptFile ? 'Please attach payment receipt first' : 'Submit for approval'}
+              >
+                {payBusy ? 'Submitting...' : `📤 Submit for Approval (${money(Number(payAmount) || 0)})`}
               </button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Payment Submitted Confirmation Modal */}
+      {submittedSuccessModal && (
+        <Modal title="Payment Receipt Submitted" onClose={() => setSubmittedSuccessModal(null)}>
+          <div style={{ textAlign: 'center', padding: 10 }}>
+            <div style={{ fontSize: '3rem' }}>⏳</div>
+            <h3 style={{ margin: '6px 0 2px' }}>Awaiting Approver Verification</h3>
+            <span className="lms-pill" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', fontWeight: 700 }}>
+              STATUS: PENDING APPROVAL
+            </span>
+
+            <div style={{ background: 'var(--hv)', padding: 16, borderRadius: 10, textAlign: 'left', marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8, fontSize: '0.9rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Submission ID:</span>
+                <strong style={{ fontFamily: 'monospace' }}>{submittedSuccessModal.id}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Invoice / Term:</span>
+                <strong>{submittedSuccessModal.feeId} ({submittedSuccessModal.term})</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Amount Submitted:</span>
+                <strong style={{ fontSize: '1.1rem', color: 'var(--tx)' }}>{money(submittedSuccessModal.amountSubmitted)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Payment Method:</span>
+                <strong>{submittedSuccessModal.paymentMethod}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Reference Code:</span>
+                <strong style={{ fontFamily: 'monospace' }}>{submittedSuccessModal.referenceCode}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Attached Receipt:</span>
+                <strong>{submittedSuccessModal.receiptFileName}</strong>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.86rem', color: 'var(--mu)', marginTop: 14, lineHeight: 1.45 }}>
+              Your payment details and receipt have been securely logged. The designated finance approver will review and confirm the receipt. Once approved, your invoice status will automatically update to <strong>“Paid”</strong>.
+            </p>
+
+            <div className="acts" style={{ marginTop: 18 }}>
+              <button
+                type="button"
+                className="btn pr"
+                style={{ width: '100%' }}
+                onClick={() => setSubmittedSuccessModal(null)}
+              >
+                Understood, Return to Portal
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* View Submitted Receipt Modal */}
+      {viewSubmissionModal && (
+        <Modal
+          title={`Submission Receipt — ${viewSubmissionModal.referenceCode || viewSubmissionModal.id}`}
+          onClose={() => setViewSubmissionModal(null)}
+        >
+          <div style={{ padding: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+              <div>
+                <strong>Invoice:</strong> {viewSubmissionModal.feeId} ({viewSubmissionModal.term || 'Term 1'})
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Badge v={viewSubmissionModal.status} />
+                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                  {viewSubmissionModal.status === 'Pending' ? '⏳ Pending Review' : viewSubmissionModal.status === 'Approved' ? '✓ Approved' : '✕ Rejected'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--hv)', padding: 12, borderRadius: 8, fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Amount Submitted:</span>
+                <strong>{money(viewSubmissionModal.amount)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Payment Method:</span>
+                <span>{viewSubmissionModal.paymentMethod}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Date Submitted:</span>
+                <span>{new Date(viewSubmissionModal.submittedAt).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {viewSubmissionModal.reviewedBy && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--bd)', paddingTop: 6 }}>
+                  <span>Reviewed By:</span>
+                  <strong>{viewSubmissionModal.reviewedBy} ({new Date(viewSubmissionModal.reviewedAt).toLocaleDateString()})</strong>
+                </div>
+              )}
+              {viewSubmissionModal.reviewNotes && (
+                <div style={{ borderTop: '1px solid var(--bd)', paddingTop: 6 }}>
+                  <span style={{ color: 'var(--mu)', display: 'block', fontSize: '0.8rem' }}>Reviewer Notes:</span>
+                  <div style={{ fontStyle: 'italic', marginTop: 2, color: viewSubmissionModal.status === 'Rejected' ? '#dc2626' : 'var(--tx)' }}>
+                    "{viewSubmissionModal.reviewNotes}"
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Receipt Preview */}
+            <h5 style={{ margin: '12px 0 6px', fontSize: '0.9rem' }}>Attached Receipt Document:</h5>
+            {viewSubmissionModal.receiptFile ? (
+              <div style={{ textAlign: 'center', background: 'var(--hv)', padding: 12, borderRadius: 8, border: '1px solid var(--bd)' }}>
+                {viewSubmissionModal.receiptFile.startsWith('data:image/') || viewSubmissionModal.receiptFile.includes('image') ? (
+                  <img
+                    src={viewSubmissionModal.receiptFile}
+                    alt="Receipt"
+                    style={{ maxWidth: '100%', maxHeight: 350, objectFit: 'contain', borderRadius: 6 }}
+                  />
+                ) : (
+                  <div style={{ padding: 20 }}>
+                    <div style={{ fontSize: '2.5rem' }}>📄</div>
+                    <p style={{ margin: '8px 0', fontWeight: 600 }}>{viewSubmissionModal.receiptFileName || 'payment_receipt.pdf'}</p>
+                  </div>
+                )}
+                <div style={{ marginTop: 10 }}>
+                  <a
+                    href={viewSubmissionModal.receiptFile}
+                    target="_blank"
+                    rel="noreferrer"
+                    download={viewSubmissionModal.receiptFileName || 'receipt'}
+                    className="btn sm"
+                  >
+                    📥 Download Original Receipt
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding: 16, background: 'var(--hv)', borderRadius: 8, color: 'var(--mu)', textAlign: 'center' }}>
+                No receipt file attached.
+              </div>
+            )}
+
+            <div className="acts" style={{ marginTop: 16 }}>
+              <button type="button" className="btn" style={{ width: '100%' }} onClick={() => setViewSubmissionModal(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

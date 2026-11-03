@@ -27,6 +27,7 @@ import teacherAppRouter from './routes/teacherApp.js';
 import { migrateProfileSchema } from './db/migrate_profile.js';
 import { migrateLmsSchema } from './db/migrate_lms.js';
 import { migrateUserSecuritySchema } from './db/migrate_user_security.js';
+import { migrateFeeApprovalSchema } from './db/migrate_fee_approval.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -119,6 +120,7 @@ pool.query('SELECT 1')
     await migrateProfileSchema();
     await migrateLmsSchema();
     await migrateUserSecuritySchema();
+    await migrateFeeApprovalSchema();
     app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
   })
   .catch(err => {
