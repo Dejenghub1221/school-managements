@@ -215,7 +215,7 @@ router.get('/portal', async (req, res, next) => {
       // Fetch recent lessons for fast continuation
       const coursesWithLessons = await Promise.all(courses.map(async (crs) => {
         const { rows: lessons } = await pool.query(
-          `SELECT l.id, l.title, l.duration_minutes, l.video_url, l.order_index,
+          `SELECT l.id, l.title, l.duration_minutes, l.duration_minutes AS duration_mins, l.video_url, l.order_index, l.created_at,
                   m.title AS module_title,
                   COALESCE(lp.completed, false) AS completed
            FROM lms_lessons l

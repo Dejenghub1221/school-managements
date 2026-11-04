@@ -17,6 +17,21 @@ const TEACHER_PILLS = [
   { id: 'topics', label: 'Topics', icon: 'topics' }
 ];
 
+function formatLessonTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+const getLocalNowStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
 export default function TeacherApp() {
   const { user } = useAuth();
   const { money } = useSettings();
@@ -61,7 +76,8 @@ export default function TeacherApp() {
     title: '',
     durationMinutes: 25,
     videoUrl: '',
-    content: ''
+    content: '',
+    uploadTime: getLocalNowStr()
   });
 
   const [newTopic, setNewTopic] = useState({
@@ -219,7 +235,7 @@ export default function TeacherApp() {
       });
       setToast('Lesson uploaded and published to LMS successfully!');
       setLessonModal(false);
-      setNewLesson({ courseId: '', moduleId: '', title: '', durationMinutes: 25, videoUrl: '', content: '' });
+      setNewLesson({ courseId: '', moduleId: '', title: '', durationMinutes: 25, videoUrl: '', content: '', uploadTime: getLocalNowStr() });
       loadPortal();
     } catch (e) {
       setToast(e.message);
@@ -948,9 +964,16 @@ export default function TeacherApp() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6, paddingLeft: 12 }}>
                           {m.lessons?.length ? (
                             m.lessons.map(l => (
-                              <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                              <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, gap: 8 }}>
                                 <span>▶ {l.title}</span>
-                                <small className="muted">{l.duration_minutes}m</small>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                                  {l.created_at && (
+                                    <span className="muted" style={{ fontSize: 11 }}>
+                                      🕒 Uploaded: {formatLessonTime(l.created_at)}
+                                    </span>
+                                  )}
+                                  <small className="muted">{l.duration_minutes}m</small>
+                                </div>
                               </div>
                             ))
                           ) : (
@@ -1165,6 +1188,17 @@ export default function TeacherApp() {
                 value={newLesson.title}
                 onChange={e => setNewLesson(prev => ({ ...prev, title: e.target.value }))}
                 required
+              />
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: 'block', fontWeight: 600, marginBottom: 6 }}>Upload / Publish Date & Time:</label>
+              <input
+                type="datetime-local"
+                className="input"
+                style={{ width: '100%' }}
+                value={newLesson.uploadTime}
+                onChange={e => setNewLesson(prev => ({ ...prev, uploadTime: e.target.value }))}
               />
             </div>
 

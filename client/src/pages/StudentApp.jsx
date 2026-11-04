@@ -17,6 +17,19 @@ const STUDENT_PILLS = [
   { id: 'library', label: 'Library', icon: 'library' }
 ];
 
+function formatLessonTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 export default function StudentApp() {
   const { user } = useAuth();
   const { money } = useSettings();
@@ -777,10 +790,17 @@ export default function StudentApp() {
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span className="lesson-play-ic">▶</span>
-                            <span>{les.title}</span>
+                            <div>
+                              <div style={{ fontWeight: 500 }}>{les.title}</div>
+                              {les.created_at && (
+                                <div style={{ fontSize: 11, color: 'var(--mut)' }}>
+                                  🕒 Uploaded: {formatLessonTime(les.created_at)}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <small className="muted">{les.duration_mins}m</small>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                            <small className="muted">{les.duration_minutes || les.duration_mins || 20}m</small>
                             {les.completed ? (
                               <span className="bd g" style={{ fontSize: 11 }}>✓ Done</span>
                             ) : (
@@ -1073,9 +1093,18 @@ export default function StudentApp() {
       {activeLessonModal && (
         <Modal title={activeLessonModal.title} onClose={() => setActiveLessonModal(null)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <span className="bd g">{activeLessonModal.subject}</span>
-              <span className="muted">Duration: {activeLessonModal.duration_mins} mins</span>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {activeLessonModal.created_at && (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    🕒 Uploaded: {formatLessonTime(activeLessonModal.created_at)}
+                  </span>
+                )}
+                <span className="muted" style={{ fontSize: 12 }}>
+                  ⏱️ {activeLessonModal.duration_minutes || activeLessonModal.duration_mins || 20} mins
+                </span>
+              </div>
             </div>
 
             <div className="lms-video-player-box" style={{ background: '#0f172a', borderRadius: 8, padding: 24, textAlign: 'center', color: '#fff' }}>
