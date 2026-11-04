@@ -9,6 +9,19 @@ const SUBJECTS = ['All', 'Mathematics', 'English', 'Science', 'History', 'Geogra
 const CLASSES = ['All', '7A', '7B', '8A', '8B', '9A', '9B'];
 const GRADIENTS = ['gradient-teal', 'gradient-blue', 'gradient-purple', 'gradient-amber', 'gradient-rose', 'gradient-emerald'];
 
+function formatLessonTime(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 export default function Lms() {
   const { user, can } = useAuth();
   const write = can('lms') || user?.role === 'admin' || user?.role === 'teacher';
@@ -396,6 +409,7 @@ export default function Lms() {
                                     <span>⏱️ {les.duration_minutes || 20} mins</span>
                                     {les.video_url && <span>🎥 Video Lecture</span>}
                                     {les.resources?.length > 0 && <span>📎 {les.resources.length} Attachments</span>}
+                                    {les.created_at && <span>🕒 Uploaded: {formatLessonTime(les.created_at)}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -441,9 +455,16 @@ export default function Lms() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <h2 style={{ fontSize: '1.35rem', margin: 0 }}>{activeLesson.title}</h2>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--mu)' }}>
-                          Estimated study duration: {activeLesson.duration_minutes || 20} minutes
-                        </span>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--mu)' }}>
+                            ⏱️ Estimated duration: {activeLesson.duration_minutes || 20} minutes
+                          </span>
+                          {activeLesson.created_at && (
+                            <span style={{ fontSize: '0.85rem', color: 'var(--mu)' }}>
+                              🕒 Uploaded: {formatLessonTime(activeLesson.created_at)}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {isStudent && (
                         <button
@@ -859,7 +880,8 @@ export default function Lms() {
                     title: f.title.value,
                     videoUrl: f.videoUrl.value,
                     durationMinutes: Number(f.durationMinutes.value) || 25,
-                    content: f.content.value
+                    content: f.content.value,
+                    uploadTime: f.uploadTime.value || undefined
                   }
                 });
                 setLessonModal(false);
@@ -870,6 +892,15 @@ export default function Lms() {
               <div className="fld">
                 <label htmlFor="les_title">Lesson Title *</label>
                 <input id="les_title" name="title" required placeholder="e.g. Solving Linear Systems by Elimination" />
+              </div>
+              <div className="fld">
+                <label htmlFor="les_time">Upload / Publish Date & Time</label>
+                <input
+                  id="les_time"
+                  name="uploadTime"
+                  type="datetime-local"
+                  defaultValue={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
+                />
               </div>
               <div className="fld">
                 <label htmlFor="les_video">Video URL (YouTube / Vimeo / MP4)</label>

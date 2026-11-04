@@ -341,7 +341,7 @@ router.put('/grade', async (req, res, next) => {
 // ── POST /api/teacher-app/lesson ─────────────────────────────────────────────
 router.post('/lesson', async (req, res, next) => {
   try {
-    const { moduleId, courseId, title, content, videoUrl, durationMinutes = 20, resources = [] } = req.body || {};
+    const { moduleId, courseId, title, content, videoUrl, durationMinutes = 20, resources = [], uploadTime, createdAt } = req.body || {};
     if (!moduleId || !courseId || !title) {
       return res.status(400).json({ error: 'moduleId, courseId, and title are required.' });
     }
@@ -351,12 +351,13 @@ router.post('/lesson', async (req, res, next) => {
     // Get current lesson count in module
     const { rows: countRows } = await pool.query('SELECT COUNT(*)::int AS c FROM lms_lessons WHERE module_id = $1', [moduleId]);
     const orderIndex = countRows[0].c;
+    const lessonUploadTime = uploadTime || createdAt || null;
 
     const { rows } = await pool.query(
-      `INSERT INTO lms_lessons (id, module_id, course_id, title, content, video_url, duration_minutes, order_index, resources)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO lms_lessons (id, module_id, course_id, title, content, video_url, duration_minutes, order_index, resources, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, NOW()))
        RETURNING *`,
-      [id, moduleId, courseId, title, content || '', videoUrl || null, Number(durationMinutes), orderIndex, JSON.stringify(resources)]
+      [id, moduleId, courseId, title, content || '', videoUrl || null, Number(durationMinutes), orderIndex, JSON.stringify(resources), lessonUploadTime]
     );
 
     await auditLog(req.user.username, req.user.role, 'TEACHER_UPLOAD_LESSON', 'lms_lessons', id, { title, courseId, moduleId });

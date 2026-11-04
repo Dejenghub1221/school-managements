@@ -487,17 +487,19 @@ router.post('/lessons', async (req, res, next) => {
       return res.status(403).json({ error: 'Permission denied.' });
     }
 
-    const { courseId, moduleId, title, content, videoUrl, durationMinutes = 20, orderIndex = 0, resources = [] } = req.body;
+    const { courseId, moduleId, title, content, videoUrl, durationMinutes = 20, orderIndex = 0, resources = [], uploadTime, createdAt } = req.body;
     if (!courseId || !moduleId || !title) {
       return res.status(400).json({ error: 'Course ID, Module ID, and title are required.' });
     }
 
     const id = `LES_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const lessonUploadTime = uploadTime || createdAt || null;
+
     const { rows } = await pool.query(`
-      INSERT INTO lms_lessons (id, course_id, module_id, title, content, video_url, duration_minutes, order_index, resources)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+      INSERT INTO lms_lessons (id, course_id, module_id, title, content, video_url, duration_minutes, order_index, resources, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, COALESCE($10::timestamptz, NOW()))
       RETURNING *
-    `, [id, courseId, moduleId, title, content || '', videoUrl || '', durationMinutes, orderIndex, JSON.stringify(resources)]);
+    `, [id, courseId, moduleId, title, content || '', videoUrl || '', durationMinutes, orderIndex, JSON.stringify(resources), lessonUploadTime]);
 
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -512,7 +514,8 @@ router.put('/lessons/:id', async (req, res, next) => {
     }
 
     const { id } = req.params;
-    const { title, content, videoUrl, durationMinutes, orderIndex, resources, moduleId } = req.body;
+    const { title, content, videoUrl, durationMinutes, orderIndex, resources, moduleId, uploadTime, createdAt } = req.body;
+    const lessonUploadTime = uploadTime || createdAt || null;
 
     const { rows } = await pool.query(`
       UPDATE lms_lessons
@@ -522,10 +525,11 @@ router.put('/lessons/:id', async (req, res, next) => {
           duration_minutes = COALESCE($4, duration_minutes),
           order_index = COALESCE($5, order_index),
           resources = CASE WHEN $6::jsonb IS NOT NULL THEN $6::jsonb ELSE resources END,
-          module_id = COALESCE($7, module_id)
-      WHERE id = $8
+          module_id = COALESCE($7, module_id),
+          created_at = COALESCE($8::timestamptz, created_at)
+      WHERE id = $9
       RETURNING *
-    `, [title, content, videoUrl, durationMinutes, orderIndex, resources ? JSON.stringify(resources) : null, moduleId, id]);
+    `, [title, content, videoUrl, durationMinutes, orderIndex, resources ? JSON.stringify(resources) : null, moduleId, lessonUploadTime, id]);
 
     if (!rows.length) return res.status(404).json({ error: 'Lesson not found.' });
     res.json(rows[0]);
