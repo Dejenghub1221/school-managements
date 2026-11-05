@@ -10,15 +10,18 @@ export function SettingsProvider({ children }) {
     school: 'ABC Academy',
     year: '2026/27',
     cur: '$',
-    theme: 'system'
+    theme: 'light'
   });
 
   const applyThemeAndChrome = s => {
     document.title = `${s.school} – School Managements`;
-    if (s.theme === 'system') {
-      document.documentElement.removeAttribute('data-theme');
+    const userTheme = localStorage.getItem('theme');
+    const effectiveTheme = userTheme || s.theme || 'light';
+    if (effectiveTheme === 'system') {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.dataset.theme = prefersDark ? 'dark' : 'light';
     } else {
-      document.documentElement.dataset.theme = s.theme;
+      document.documentElement.dataset.theme = effectiveTheme;
     }
   };
 
@@ -36,6 +39,9 @@ export function SettingsProvider({ children }) {
   const updateSettings = async newSettings => {
     const updated = await api('/settings', { method: 'PUT', body: newSettings });
     setSettingsState(updated);
+    if (newSettings.theme) {
+      localStorage.setItem('theme', newSettings.theme);
+    }
     applyThemeAndChrome(updated);
     return updated;
   };

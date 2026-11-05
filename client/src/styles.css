@@ -813,6 +813,8 @@ dialog {
   padding: 20px;
   width: min(520px, calc(100vw - 24px));
   max-height: 90vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--sf);
   color: var(--tx);
 }

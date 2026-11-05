@@ -4,4 +4,19 @@
 <title>School Managements</title>
 <link rel="icon" type="image/png" href="/sl_icon.png" />
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  (function() {
+    try {
+      var t = localStorage.getItem('theme') || 'light';
+      if (t === 'system') {
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = prefersDark ? 'dark' : 'light';
+      } else {
+        document.documentElement.dataset.theme = t;
+      }
+    } catch(e) {
+      document.documentElement.dataset.theme = 'light';
+    }
+  })();
+</script>
 </head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>
