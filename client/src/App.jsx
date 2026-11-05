@@ -100,23 +100,28 @@ function Layout() {
   const isReadOnly = activeKey !== 'dashboard' && !can(activeKey);
 
   // Theme toggle — stored in localStorage so it works for ALL roles (no API needed)
-  const [localTheme, setLocalTheme] = useState(() => localStorage.getItem('theme') || 'system');
+  const [localTheme, setLocalTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
-    const theme = localTheme === 'system' ? null : localTheme;
-    if (theme) {
-      document.documentElement.dataset.theme = theme;
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
+    const effectiveTheme = localTheme === 'system'
+      ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : localTheme;
+    document.documentElement.dataset.theme = effectiveTheme;
     localStorage.setItem('theme', localTheme);
   }, [localTheme]);
 
   const toggleTheme = () => {
-    setLocalTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setLocalTheme(prev => {
+      const isCurrentDark = document.documentElement.dataset.theme === 'dark';
+      const next = isCurrentDark ? 'light' : 'dark';
+      localStorage.setItem('theme', next);
+      document.documentElement.dataset.theme = next;
+      return next;
+    });
   };
   const isDark = localTheme === 'dark' ||
-    (localTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    (localTheme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ||
+    document.documentElement.dataset.theme === 'dark';
 
   useEffect(() => {
     document.body.classList.toggle('ro', isReadOnly);

@@ -17,7 +17,16 @@ export default function Settings() {
   const [school, setSchool] = useState(settings.school || 'ABC Academy');
   const [year, setYear] = useState(settings.year || '2026/27');
   const [cur, setCur] = useState(settings.cur || '$');
-  const [theme, setTheme] = useState(settings.theme || 'system');
+  const [theme, setTheme] = useState(settings.theme || 'light');
+
+  useEffect(() => {
+    if (settings) {
+      if (settings.school) setSchool(settings.school);
+      if (settings.year) setYear(settings.year);
+      if (settings.cur) setCur(settings.cur);
+      if (settings.theme) setTheme(settings.theme);
+    }
+  }, [settings]);
 
   // Accounts state
   const [accounts, setAccounts] = useState([]);
