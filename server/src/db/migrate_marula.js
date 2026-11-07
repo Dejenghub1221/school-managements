@@ -102,8 +102,20 @@ async function migrate() {
         reason TEXT NOT NULL,
         status TEXT DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Rejected')),
         cover_teacher_id TEXT REFERENCES teachers(id) ON DELETE SET NULL,
+        leave_type TEXT DEFAULT 'Personal',
+        emergency_contact TEXT,
+        handover_notes TEXT,
+        review_notes TEXT,
+        reviewed_by TEXT,
+        reviewed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_type TEXT DEFAULT 'Personal';
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS emergency_contact TEXT;
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS handover_notes TEXT;
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS review_notes TEXT;
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reviewed_by TEXT;
+      ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
     `);
 
     // 8. messages table

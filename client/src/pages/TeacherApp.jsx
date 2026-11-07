@@ -5,7 +5,7 @@ import { useSettings } from '../context/SettingsContext.jsx';
 import { Icon } from '../icons.jsx';
 import { Badge, Empty, Modal, Skeleton, Toast } from '../components/index.js';
 
-// The 8 quick access pills from the teacher image
+// The quick access pills from the teacher image + leave requests
 const TEACHER_PILLS = [
   { id: 'classes', label: 'Classes', icon: 'classes' },
   { id: 'attendance', label: 'Attendance', icon: 'attendance' },
@@ -14,7 +14,8 @@ const TEACHER_PILLS = [
   { id: 'lessons', label: 'Lessons', icon: 'lessons' },
   { id: 'announcement', label: 'Announcement', icon: 'announcement' },
   { id: 'timetable', label: 'Timetable', icon: 'timetable' },
-  { id: 'topics', label: 'Topics', icon: 'topics' }
+  { id: 'topics', label: 'Topics', icon: 'topics' },
+  { id: 'leave', label: 'Leave Requests', icon: 'leave' }
 ];
 
 function formatLessonTime(dateStr) {
@@ -106,12 +107,112 @@ export default function TeacherApp() {
     meetingDate: ''
   });
 
+  // Teacher Leave Request state
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const [leaveModal, setLeaveModal] = useState(false);
+  const [leaveModalBusy, setLeaveModalBusy] = useState(false);
+  const [leaveModalErr, setLeaveModalErr] = useState('');
+  const [leaveFormType, setLeaveFormType] = useState('Sick / Medical');
+  const [leaveFormStartDate, setLeaveFormStartDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [leaveFormEndDate, setLeaveFormEndDate] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [leaveFormReason, setLeaveFormReason] = useState('');
+  const [leaveFormHandover, setLeaveFormHandover] = useState('');
+  const [leaveFormEmergency, setLeaveFormEmergency] = useState('');
+
+  const getDaysBetween = (startStr, endStr) => {
+    if (!startStr || !endStr) return 0;
+    const s = new Date(startStr);
+    const e = new Date(endStr);
+    if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
+    return Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const loadLeaveRequests = async () => {
+    try {
+      setLeaveLoading(true);
+      const data = await api('/leave-requests');
+      setLeaveRequests(Array.isArray(data) ? data : []);
+    } catch {
+      // ignore
+    } finally {
+      setLeaveLoading(false);
+    }
+  };
+
+  const openTeacherLeaveModal = () => {
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    setLeaveFormStartDate(tomorrow);
+    setLeaveFormEndDate(tomorrow);
+    setLeaveFormType('Sick / Medical');
+    setLeaveFormReason('');
+    setLeaveFormHandover('');
+    setLeaveFormEmergency('');
+    setLeaveModalErr('');
+    setLeaveModalBusy(false);
+    setLeaveModal(true);
+  };
+
+  const handleTeacherLeaveSubmit = async e => {
+    e.preventDefault();
+    setLeaveModalErr('');
+    if (!leaveFormStartDate || !leaveFormEndDate) {
+      setLeaveModalErr('Start date and end date are required.');
+      return;
+    }
+    if (new Date(leaveFormStartDate) > new Date(leaveFormEndDate)) {
+      setLeaveModalErr('Start date cannot be after end date.');
+      return;
+    }
+    if (!leaveFormReason.trim()) {
+      setLeaveModalErr('Reason for leave is required.');
+      return;
+    }
+
+    setLeaveModalBusy(true);
+    try {
+      await api('/leave-requests', {
+        method: 'POST',
+        body: {
+          startDate: leaveFormStartDate,
+          endDate: leaveFormEndDate,
+          reason: leaveFormReason.trim(),
+          leaveType: leaveFormType,
+          emergencyContact: leaveFormEmergency.trim(),
+          handoverNotes: leaveFormHandover.trim()
+        }
+      });
+      setToast('Leave request submitted successfully. Awaiting administrator review.');
+      setLeaveModal(false);
+      loadLeaveRequests();
+    } catch (err) {
+      setLeaveModalErr(err.message || 'Failed to submit leave request.');
+    } finally {
+      setLeaveModalBusy(false);
+    }
+  };
+
+  const handleDeleteTeacherLeave = async id => {
+    if (!window.confirm('Withdraw this pending leave request?')) return;
+    try {
+      await api(`/leave-requests/${id}`, { method: 'DELETE' });
+      setToast('Leave request withdrawn.');
+      loadLeaveRequests();
+    } catch (err) {
+      setToast(err.message || 'Failed to withdraw leave request.');
+    }
+  };
+
   // Load teacher portal data
   const loadPortal = async () => {
     try {
       setLoading(true);
-      const data = await api('/teacher-app/portal');
+      const [data, leaves] = await Promise.all([
+        api('/teacher-app/portal'),
+        api('/leave-requests').catch(() => [])
+      ]);
       setPortal(data);
+      setLeaveRequests(Array.isArray(leaves) ? leaves : []);
 
       if (data.teacher?.classes?.length) {
         setSelectedClass(data.teacher.classes[0]);
@@ -404,14 +505,6 @@ export default function TeacherApp() {
           <span className="parent-portal-date">{todayStr}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a
-            href="/profile"
-            className="btn sm"
-            style={{ textDecoration: 'none' }}
-            title="Change your teacher account password"
-          >
-            🔑 Change Password
-          </a>
           <button
             type="button"
             className="btn sm pr"
@@ -1136,6 +1229,158 @@ export default function TeacherApp() {
         </div>
       )}
 
+      {/* ── TAB 9: LEAVE REQUESTS & TIME OFF ── */}
+      {activeSection === 'leave' && (
+        <div className="parent-detail-card">
+          <div className="parent-card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h3>🏖️ Leave Requests & Time Off</h3>
+              <p className="muted">Submit absence requests, view approval status, assigned cover teachers, and administrative feedback.</p>
+            </div>
+            <button
+              type="button"
+              className="btn pr"
+              onClick={openTeacherLeaveModal}
+            >
+              + Submit Leave Request
+            </button>
+          </div>
+
+          {/* Quick Metrics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
+            <div style={{ background: 'var(--hv)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--bd)' }}>
+              <div style={{ fontSize: 13, color: 'var(--mu)', fontWeight: 500 }}>Total Requests</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4 }}>{leaveRequests.length}</div>
+            </div>
+            <div style={{ background: 'var(--hv)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--bd)' }}>
+              <div style={{ fontSize: 13, color: 'var(--mu)', fontWeight: 500 }}>⏳ Pending Review</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: '#d97706' }}>
+                {leaveRequests.filter(l => l.status === 'Pending').length}
+              </div>
+            </div>
+            <div style={{ background: 'var(--hv)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--bd)' }}>
+              <div style={{ fontSize: 13, color: 'var(--mu)', fontWeight: 500 }}>✅ Approved Leaves</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: '#16a34a' }}>
+                {leaveRequests.filter(l => l.status === 'Approved').length}
+              </div>
+            </div>
+            <div style={{ background: 'var(--hv)', padding: '14px 16px', borderRadius: 8, border: '1px solid var(--bd)' }}>
+              <div style={{ fontSize: 13, color: 'var(--mu)', fontWeight: 500 }}>❌ Rejected</div>
+              <div style={{ fontSize: 24, fontWeight: 700, marginTop: 4, color: '#dc2626' }}>
+                {leaveRequests.filter(l => l.status === 'Rejected').length}
+              </div>
+            </div>
+          </div>
+
+          {/* Leave Requests Table */}
+          {leaveLoading ? (
+            <p className="muted" style={{ padding: 30, textAlign: 'center' }}>Loading leave requests...</p>
+          ) : leaveRequests.length === 0 ? (
+            <div style={{ padding: '36px 20px', textAlign: 'center', background: 'var(--hv)', borderRadius: 8 }}>
+              <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px' }}>No leave requests submitted yet</p>
+              <p className="muted" style={{ fontSize: 14, margin: '0 0 16px' }}>Need time off for medical, personal, or professional reasons? Submit a request to administration.</p>
+              <button type="button" className="btn pr" onClick={openTeacherLeaveModal}>
+                + Request Leave
+              </button>
+            </div>
+          ) : (
+            <div className="tw">
+              <table className="rt">
+                <thead>
+                  <tr>
+                    <th>Leave Type</th>
+                    <th>Dates & Duration</th>
+                    <th>Reason & Handover</th>
+                    <th>Status</th>
+                    <th>Assigned Cover Teacher</th>
+                    <th>Admin Review Remarks</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaveRequests.map(lr => {
+                    const days = getDaysBetween(lr.start_date, lr.end_date);
+                    return (
+                      <tr key={lr.id}>
+                        <td data-l="Leave Type">
+                          <strong>{lr.leave_type || 'Personal'}</strong>
+                        </td>
+                        <td data-l="Dates & Duration">
+                          <div style={{ whiteSpace: 'nowrap', fontSize: '0.85rem' }}>
+                            {lr.start_date} <span className="muted">→</span> {lr.end_date}
+                          </div>
+                          <small className="muted" style={{ display: 'block' }}>
+                            {days} calendar day{days === 1 ? '' : 's'}
+                          </small>
+                        </td>
+                        <td data-l="Reason & Handover" style={{ maxWidth: 220 }}>
+                          <div style={{ fontSize: '0.85rem' }}>{lr.reason}</div>
+                          {lr.handover_notes && (
+                            <small className="muted" style={{ display: 'block', marginTop: 3 }}>
+                              <strong>Handover:</strong> {lr.handover_notes}
+                            </small>
+                          )}
+                          {lr.emergency_contact && (
+                            <small className="muted" style={{ display: 'block', marginTop: 2 }}>
+                              <strong>Contact:</strong> {lr.emergency_contact}
+                            </small>
+                          )}
+                        </td>
+                        <td data-l="Status">
+                          <span
+                            className={`bd ${lr.status === 'Approved' ? 'g' : lr.status === 'Pending' ? 'y' : 'r'}`}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {lr.status}
+                          </span>
+                        </td>
+                        <td data-l="Cover Teacher">
+                          {lr.coverTeacherName ? (
+                            <span style={{ fontSize: '0.85rem' }}>
+                              Cover by: <strong>{lr.coverTeacherName}</strong>
+                            </span>
+                          ) : (
+                            <span className="muted">{lr.status === 'Approved' ? 'No cover required' : 'Pending assignment'}</span>
+                          )}
+                        </td>
+                        <td data-l="Admin Review Remarks" style={{ maxWidth: 200, fontSize: '0.82rem' }}>
+                          {lr.reviewed_by ? (
+                            <div>
+                              <div><span className="muted">Reviewed by:</span> @{lr.reviewed_by}</div>
+                              {lr.review_notes && (
+                                <div className="muted" style={{ fontStyle: 'italic', marginTop: 2 }}>
+                                  "{lr.review_notes}"
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="muted">Awaiting administrator review</span>
+                          )}
+                        </td>
+                        <td data-l="Action">
+                          {lr.status === 'Pending' ? (
+                            <button
+                              type="button"
+                              className="btn sm dg"
+                              title="Withdraw / Cancel this pending leave request"
+                              onClick={() => handleDeleteTeacherLeave(lr.id)}
+                            >
+                              Withdraw
+                            </button>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ═════════════════════════════════════════════════════════════════════════ */}
       {/* 4. MODALS (Upload Lesson, Topic, Assignment, Message Parent)            */}
       {/* ═════════════════════════════════════════════════════════════════════════ */}
@@ -1589,6 +1834,113 @@ export default function TeacherApp() {
               </button>
               <button type="submit" className="btn pr">
                 ✓ Confirm & Notify Parent
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Submit Leave Request Modal */}
+      {leaveModal && (
+        <Modal title="🏖️ Submit Leave Request" onClose={() => setLeaveModal(false)}>
+          <form onSubmit={handleTeacherLeaveSubmit} noValidate>
+            {leaveModalErr && (
+              <div style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', borderRadius: 6, marginBottom: 12, fontSize: '0.88rem' }}>
+                {leaveModalErr}
+              </div>
+            )}
+
+            <div style={{ padding: '8px 12px', background: 'var(--hv)', borderRadius: 6, marginBottom: 14, fontSize: '0.88rem' }}>
+              <span className="muted">Requesting as:</span> <strong>{teacher?.name || user?.name || 'Teacher'}</strong> ({teacher?.subject || user?.teacherId || 'T01'})
+            </div>
+
+            <div className="fld">
+              <label htmlFor="tl_type">Leave Type *</label>
+              <select
+                id="tl_type"
+                required
+                value={leaveFormType}
+                onChange={e => setLeaveFormType(e.target.value)}
+              >
+                <option value="Sick / Medical">🩺 Sick / Medical</option>
+                <option value="Annual / Vacation">🏖️ Annual / Vacation</option>
+                <option value="Personal / Family Emergency">🏠 Personal / Family Emergency</option>
+                <option value="Maternity / Paternity">👶 Maternity / Paternity</option>
+                <option value="Professional Development">🎓 Professional Development / Training</option>
+                <option value="Bereavement">🕊️ Bereavement</option>
+                <option value="Unpaid Leave">📄 Unpaid Leave</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="fld">
+                <label htmlFor="tl_s">Start Date *</label>
+                <input
+                  id="tl_s"
+                  type="date"
+                  required
+                  value={leaveFormStartDate}
+                  onChange={e => setLeaveFormStartDate(e.target.value)}
+                />
+              </div>
+              <div className="fld">
+                <label htmlFor="tl_e">End Date *</label>
+                <input
+                  id="tl_e"
+                  type="date"
+                  required
+                  value={leaveFormEndDate}
+                  onChange={e => setLeaveFormEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={{ margin: '-6px 0 12px', fontSize: '0.82rem', color: 'var(--mu)' }}>
+              📅 Total duration: <strong>{getDaysBetween(leaveFormStartDate, leaveFormEndDate)} day(s)</strong>
+              {new Date(leaveFormStartDate) > new Date(leaveFormEndDate) && (
+                <span style={{ color: '#dc2626', marginLeft: 8 }}>(End date must be on or after start date)</span>
+              )}
+            </div>
+
+            <div className="fld">
+              <label htmlFor="tl_r">Reason for Leave *</label>
+              <textarea
+                id="tl_r"
+                rows={3}
+                placeholder="Explain the reason for taking leave (e.g., medical appointment, family circumstance)..."
+                required
+                value={leaveFormReason}
+                onChange={e => setLeaveFormReason(e.target.value)}
+              />
+            </div>
+
+            <div className="fld">
+              <label htmlFor="tl_handover">Lesson Handover & Class Coverage Plan (Optional)</label>
+              <textarea
+                id="tl_handover"
+                rows={2}
+                placeholder="e.g. Chapter 4 Math exercises are assigned; worksheets left in staff room for cover teacher..."
+                value={leaveFormHandover}
+                onChange={e => setLeaveFormHandover(e.target.value)}
+              />
+            </div>
+
+            <div className="fld">
+              <label htmlFor="tl_emergency">Emergency Contact During Leave (Optional)</label>
+              <input
+                id="tl_emergency"
+                placeholder="e.g. +251 91 123 4567 or emergency contact name"
+                value={leaveFormEmergency}
+                onChange={e => setLeaveFormEmergency(e.target.value)}
+              />
+            </div>
+
+            <div className="acts" style={{ marginTop: 16 }}>
+              <button type="button" className="btn" onClick={() => setLeaveModal(false)} disabled={leaveModalBusy}>
+                Cancel
+              </button>
+              <button className="btn pr" disabled={leaveModalBusy}>
+                {leaveModalBusy ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
           </form>

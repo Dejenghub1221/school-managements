@@ -228,7 +228,8 @@ h3 { font-size: 1rem; }
   display: block;
 }
 
-#side a:not(.brand-link), #side button:not(.side-toggle) {
+#side a:not(.brand-link):not(.side-sublink),
+#side button:not(.side-toggle):not(.side-nav-chevron-btn) {
   all: unset;
   box-sizing: border-box;
   display: flex;
@@ -243,19 +244,158 @@ h3 { font-size: 1rem; }
   text-decoration: none;
 }
 
-#side a:not(.brand-link):hover, #side button:not(.side-toggle):hover {
-  background: rgba(255,255,255,0.08);
+#side a:not(.brand-link):not(.side-sublink):hover,
+#side button:not(.side-toggle):not(.side-nav-chevron-btn):hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ch, #2dd4bf);
 }
 
-#side a:not(.brand-link).active, #side button:not(.side-toggle)[aria-current=page] {
+#side a:not(.brand-link):not(.side-sublink).active,
+#side button:not(.side-toggle):not(.side-nav-chevron-btn)[aria-current=page] {
   background: rgba(255,255,255,0.12);
   color: #fff;
   border-left-color: var(--ch);
   font-weight: 600;
 }
 
-#side a:not(.brand-link):focus-visible, #side button:not(.side-toggle):focus-visible {
+#side a:not(.brand-link):not(.side-sublink):focus-visible,
+#side button:not(.side-toggle):not(.side-nav-chevron-btn):focus-visible {
   outline: 3px solid var(--ch);
+}
+
+/* ── Sidebar Expandable Settings Component List & Chevron Button ────────── */
+.side-nav-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.side-nav-parent-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.side-nav-parent-row > a {
+  flex: 1;
+  min-width: 0;
+  padding-right: 44px !important;
+}
+
+.side-nav-group.expanded .side-nav-parent-row > a {
+  border-left-color: transparent !important;
+}
+
+#side button.side-nav-chevron-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: #cfe3de;
+  cursor: pointer;
+  position: absolute;
+  right: 8px;
+  z-index: 3;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+#side button.side-nav-chevron-btn:hover {
+  background: transparent;
+  color: #ffffff;
+  border: none;
+  box-shadow: none;
+}
+
+#side button.side-nav-chevron-btn:focus-visible {
+  outline: 2px solid var(--ch);
+  outline-offset: 1px;
+}
+
+#side button.side-nav-chevron-btn .chevron-icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.side-submenu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 6px 14px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.16);
+  animation: sideSubmenuFadeIn 0.18s ease;
+}
+
+@keyframes sideSubmenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#side a.side-sublink {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border-radius: 8px;
+  color: #cfe3de;
+  cursor: pointer;
+  text-decoration: none;
+  background: transparent;
+  border-left: 3.5px solid transparent;
+  transition: all 0.15s ease;
+}
+
+#side a.side-sublink:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #f2b134;
+}
+
+#side a.side-sublink:hover .side-sublink-bullet {
+  color: #f2b134;
+}
+
+#side a.side-sublink.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2b134;
+  font-weight: 600;
+  border-left: 3.5px solid #f2b134;
+}
+
+#side a.side-sublink.active .side-sublink-bullet {
+  color: #f2b134;
+}
+
+#side a.side-sublink:focus-visible {
+  outline: 2px solid var(--ch);
+}
+
+.side-sublink-bullet {
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #f2b134;
+  flex-shrink: 0;
+  display: inline-block;
 }
 
 .wrap {
@@ -358,6 +498,10 @@ main {
     padding: 10px 0;
     gap: 0;
   }
+  #side.collapsed .side-nav-chevron-btn,
+  #side.collapsed .side-submenu-list {
+    display: none !important;
+  }
   #side button.side-toggle {
     display: none !important;
   }
@@ -396,10 +540,20 @@ main {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.btn:hover {
-  background: var(--hv);
+.btn:hover:not(:disabled):not(.pr):not(.dg) {
+  background: var(--acs);
+  color: var(--ac);
+  border-color: var(--ac);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(13, 124, 102, 0.12);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .btn.pr {
@@ -528,15 +682,43 @@ main {
 
 .tabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+}
+
+.tabs .btn {
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.tabs .btn:hover:not([aria-pressed=true]) {
+  background: var(--acs);
+  color: var(--ac);
+  border-color: var(--ac);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(13, 124, 102, 0.16);
 }
 
 .tabs .btn[aria-pressed=true] {
-  background: var(--sb);
+  background: var(--ac);
   color: #fff;
+  border-color: var(--ac);
+  box-shadow: 0 2px 6px rgba(13, 124, 102, 0.25);
+}
+
+.tabs .btn[aria-pressed=true]:hover {
+  background: var(--sb);
   border-color: var(--sb);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(16, 48, 43, 0.28);
+}
+
+.tabs .btn:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .tb {
@@ -3665,3 +3847,251 @@ body.ro [data-a=add], body.ro [data-a=edit], body.ro [data-a=del], body.ro [data
 
 
 
+
+/* Table Action Selection Box (Minimized & Sleek) */
+.table-action-select {
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: 6px;
+  background-color: var(--sf);
+  color: var(--tx);
+  border: 1px solid var(--bd);
+  cursor: pointer;
+  outline: none;
+  height: 26px;
+  min-height: 26px;
+  width: auto;
+  min-width: 96px;
+  max-width: 108px;
+  line-height: 1.2;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.table-action-select:hover {
+  border-color: var(--ac);
+  background-color: var(--hv);
+}
+
+.table-action-select:focus-visible {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 2px var(--acs);
+}
+
+.table-action-select option {
+  background-color: var(--sf);
+  color: var(--tx);
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.table-action-select option[hidden] {
+  display: none !important;
+}
+
+/* ── Table Action Toggle Button & Dropdown Menu (Only Toggle, No Box) ── */
+.table-action-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.table-action-toggle-btn {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--tx);
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+:root[data-theme="dark"] .table-action-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #cfe3de;
+}
+
+.table-action-toggle-btn:hover,
+.table-action-toggle-btn.active {
+  background: transparent;
+  border: none;
+  color: var(--ac);
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .table-action-toggle-btn:hover,
+:root[data-theme="dark"] .table-action-toggle-btn.active {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+}
+
+.table-action-toggle-btn:focus-visible {
+  outline: 2px solid var(--ac);
+  outline-offset: 1px;
+}
+
+.table-action-toggle-btn .chevron-icon {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.18s ease;
+}
+
+.table-action-toggle-btn.active .chevron-icon {
+  transform: rotate(180deg);
+}
+
+.table-action-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 170px;
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.22), 0 4px 10px -2px rgba(0, 0, 0, 0.12);
+  padding: 5px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: tableMenuFadeIn 0.15s ease-out;
+}
+
+.table-action-dropdown-menu.drop-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+@keyframes tableMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.table-action-item {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--tx);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.table-action-item:hover {
+  background: var(--hv);
+  color: var(--ac);
+}
+
+.table-action-item.danger {
+  color: #ef4444;
+}
+
+.table-action-item.danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+:root[data-theme="dark"] .table-action-item.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.table-action-item.success {
+  color: #10b981;
+}
+
+.table-action-item.success:hover {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+:root[data-theme="dark"] .table-action-item.success:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.table-action-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: transparent !important;
+}
+
+.table-action-item-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Export & Import Selection Box ── */
+.export-import-wrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.export-import-select {
+  height: 38px;
+  min-height: 38px;
+  padding: 6px 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background-color: var(--sf);
+  color: var(--tx);
+  border: 1px solid var(--bd);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.export-import-select:hover {
+  border-color: var(--ac);
+  background-color: var(--hv);
+}
+
+.export-import-select:focus-visible {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 2px var(--acs);
+}
+
+.export-import-select optgroup {
+  font-weight: 700;
+  color: var(--mu);
+  background-color: var(--sf);
+}
+
+.export-import-select option {
+  padding: 8px 12px;
+  font-weight: 500;
+  color: var(--tx);
+  background-color: var(--sf);
+}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { SUB } from '../config/entities.js';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, CsvModal, Icon } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, CsvModal, Icon, ExportImportControls } from '../components/index.js';
 
 export default function Exams() {
   const { user, can } = useAuth();
@@ -246,6 +246,27 @@ export default function Exams() {
               <option value="Scheduled">Scheduled</option>
               <option value="Completed">Completed</option>
             </select>
+            <ExportImportControls
+              entityKey="exams"
+              title="Exams"
+              columns={[
+                { key: 'id', label: 'Exam ID' },
+                { key: 'name', label: 'Exam Name' },
+                { key: 'cls', label: 'Class' },
+                { key: 'date', label: 'Date' },
+                { key: 'status', label: 'Status' }
+              ]}
+              data={filteredExams}
+              fields={[
+                { k: 'name', l: 'Exam Name', req: 1 },
+                { k: 'cls', l: 'Class', req: 1 },
+                { k: 'date', l: 'Date', t: 'date', req: 1 },
+                { k: 'status', l: 'Status' }
+              ]}
+              canImport={write}
+              onImportComplete={loadExams}
+              notify={(msg, type) => setToast(msg)}
+            />
           </div>
 
           {!exams ? (

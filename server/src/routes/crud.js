@@ -100,7 +100,7 @@ async function visible(k, row, user) {
   if (k === 'students') {
     if (own) return own.includes(row.id);
     if (user.role === 'teacher') {
-      return mine ? mine.includes(row.cls) : false;
+      return mine && mine.length ? mine.includes(row.cls) : true;
     }
     return true;
   }
@@ -237,6 +237,92 @@ export function setupCrud(app) {
         res.status(201).json(fmt(k, rows[0]));
       } catch (err) { await client.query('ROLLBACK'); next(err); }
       finally { client.release(); }
+    });
+
+    // POST /batch (Bulk Import)
+    r.post('/batch', allow(k, 'w'), async (req, res, next) => {
+      const items = Array.isArray(req.body) ? req.body : (req.body?.items || []);
+      if (!Array.isArray(items) || !items.length) {
+        return res.status(400).json({ error: 'Expected non-empty array of items.' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const inserted = [];
+        const errors = [];
+
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const { data, error } = clean(k, item);
+          if (error) {
+            errors.push({ index: i, item, error });
+            continue;
+          }
+
+          // Teacher write validations
+          if (req.user.role === 'teacher') {
+            const mine = await myClasses(req.user);
+            const tSub = await mySubject(req.user);
+            if (k === 'exams') {
+              if (data.cls !== 'All' && (!mine || !mine.includes(data.cls))) {
+                errors.push({ index: i, item, error: 'Unauthorized class.' });
+                continue;
+              }
+            }
+            if (k === 'assignments') {
+              if (!mine || !mine.includes(data.cls)) {
+                errors.push({ index: i, item, error: 'Unauthorized class.' });
+                continue;
+              }
+              if (tSub && data.subject !== tSub) {
+                errors.push({ index: i, item, error: `Unauthorized subject (${tSub}).` });
+                continue;
+              }
+              data.teacher_id = req.user.teacherId;
+            }
+            if (k === 'fees') {
+              errors.push({ index: i, item, error: 'Teachers cannot create fee records.' });
+              continue;
+            }
+          }
+
+          const id = await nextId(client, k);
+          const { sql, vals } = buildInsert(k, id, data);
+          const { rows } = await client.query(sql, vals);
+
+          if (k === 'students') {
+            for (const sub of SUB) {
+              await client.query(
+                'INSERT INTO marks (student_id, subject, mark) VALUES ($1,$2,0) ON CONFLICT DO NOTHING',
+                [id, sub]
+              );
+            }
+            if (data.guardian) {
+              await client.query(
+                `INSERT INTO student_parents (student_id, parent_id, relationship, is_primary)
+                 VALUES ($1, $2, 'Primary Guardian', true)
+                 ON CONFLICT DO NOTHING`,
+                [id, data.guardian]
+              );
+            }
+          }
+
+          inserted.push(fmt(k, rows[0]));
+        }
+
+        await auditLog(req.user.username, req.user.role, 'BULK_IMPORT', k, `${inserted.length} records`, {
+          count: inserted.length,
+          errors: errors.length
+        });
+        await client.query('COMMIT');
+        res.status(201).json({ count: inserted.length, inserted, errors });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        next(err);
+      } finally {
+        client.release();
+      }
     });
 
     // PUT /:id

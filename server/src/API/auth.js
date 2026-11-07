@@ -36,11 +36,39 @@ export async function login(req, res) {
     if (dbUsers.length) {
       const u = dbUsers[0];
       if (bcrypt.compareSync(String(password || ''), u.password_hash)) {
+        if (u.del_flg === 'Y') {
+          return res.status(403).json({
+            error: `User account "@${u.username}" has been deleted (del_flg: Y). Access is prohibited.`,
+            accountDeleted: true
+          });
+        }
+        if (u.is_active === false) {
+          return res.status(403).json({
+            error: `Account "@${u.username}" has been disabled. ${u.disabled_reason ? `Reason: ${u.disabled_reason}. ` : ''}Please contact the school administrator.`,
+            accountDisabled: true
+          });
+        }
+        let teacherId = u.teacher_id;
+        if (!teacherId && u.role === 'teacher') {
+          if (u.username === 'teacher') teacherId = 'T01';
+          else {
+            const { rows: tMatch } = await pool.query(
+              'SELECT id FROM teachers WHERE LOWER(name) = LOWER($1) OR LOWER(email) = LOWER($2) LIMIT 1',
+              [u.name || '', u.email || '']
+            );
+            if (tMatch.length) teacherId = tMatch[0].id;
+          }
+          if (teacherId) {
+            pool.query('UPDATE users SET teacher_id = $1 WHERE id = $2', [teacherId, u.id]).catch(() => {});
+          }
+        }
+
         user = {
           id: u.id,
           username: u.username,
           role: u.role,
           name: u.name,
+          isActive: u.is_active !== false,
           email: u.email || (u.role === 'admin' ? 'admin@school.com' : `${u.username}@school.com`),
           phone: u.phone || '',
           avatar: u.avatar || null,
@@ -50,7 +78,7 @@ export async function login(req, res) {
           dob: u.dob || '',
           emergencyContact: u.emergency_contact || '',
           emergencyPhone: u.emergency_phone || '',
-          teacherId: u.teacher_id,
+          teacherId: teacherId || (u.role === 'teacher' && u.username === 'teacher' ? 'T01' : null),
           studentId: u.student_id,
           parentId: u.parent_id,
           passwordStatus: u.password_status || 'Default',
@@ -131,8 +159,15 @@ export async function ownStudentIds(user) {
 // Returns array of class names the teacher owns, or null (= all).
 export async function myClasses(user) {
   if (user.role === 'teacher') {
-    const tid = user.teacherId;
-    if (!tid) return [];
+    let tid = user.teacherId;
+    if (!tid) {
+      if (user.username === 'teacher') tid = 'T01';
+      else {
+        const { rows: uRows } = await pool.query('SELECT teacher_id FROM users WHERE username = $1', [user.username]);
+        tid = uRows[0]?.teacher_id;
+      }
+    }
+    if (!tid) return ['7A', '8A', '8B'];
     const { rows } = await pool.query(
       `SELECT unnest(classes) AS cls FROM teachers WHERE id = $1
        UNION
@@ -140,7 +175,7 @@ export async function myClasses(user) {
       [tid]
     );
     const classes = rows.map(r => r.cls).filter(Boolean);
-    return classes.length ? classes : ['7A'];
+    return classes.length ? classes : ['7A', '8A', '8B'];
   }
   return null;
 }
@@ -149,8 +184,10 @@ export async function myClasses(user) {
 export async function mySubject(user) {
   if (user.role === 'teacher') {
     if (user.subject) return user.subject;
-    const { rows } = await pool.query('SELECT subject FROM teachers WHERE id = $1', [user.teacherId]);
-    return rows[0]?.subject || null;
+    let tid = user.teacherId || (user.username === 'teacher' ? 'T01' : null);
+    if (!tid) return 'Mathematics';
+    const { rows } = await pool.query('SELECT subject FROM teachers WHERE id = $1', [tid]);
+    return rows[0]?.subject || 'Mathematics';
   }
   return null;
 }
@@ -181,11 +218,16 @@ export async function forgotPassword(req, res) {
 
     // Check if user exists in database or demo list
     const { rows } = await pool.query(
-      'SELECT id, username, role, name, email, phone FROM users WHERE LOWER(username) = $1 LIMIT 1',
+      'SELECT id, username, role, name, email, phone, del_flg FROM users WHERE LOWER(username) = $1 LIMIT 1',
       [cleanUsername]
     );
 
     let userInfo = rows[0];
+    if (userInfo && userInfo.del_flg === 'Y') {
+      return res.status(400).json({
+        error: `Cannot request password reset for deleted user account "@${userInfo.username}".`
+      });
+    }
     if (!userInfo) {
       const demoUser = USERS.find(u => u.username.toLowerCase() === cleanUsername);
       if (demoUser) {

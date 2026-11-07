@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import { useSettings } from './context/SettingsContext.jsx';
 import { useLang } from './context/LangContext.jsx';
@@ -74,6 +74,31 @@ function Layout() {
   });
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [settingsNavOpen, setSettingsNavOpen] = useState(() => {
+    return location.pathname.startsWith('/settings');
+  });
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings')) {
+      setSettingsNavOpen(true);
+    }
+  }, [location.pathname]);
+
+  const settingsSubItems = [
+    { id: 'general', label: 'General' },
+    ...(user?.role === 'admin' ? [{ id: 'accounts', label: 'Accounts & Linking' }] : []),
+    ...(user?.role === 'admin' ? [{ id: 'teaching', label: 'Teaching & Staff Leave' }] : []),
+    { id: 'announcements', label: 'Announcements' },
+    ...(user?.role === 'admin' ? [
+      { id: 'promotion', label: 'Class Promotion' },
+      { id: 'audit', label: 'Audit Log' }
+    ] : [])
+  ];
+
+  const currentSettingsTab = location.pathname === '/settings'
+    ? (new URLSearchParams(location.search).get('tab') || 'general')
+    : null;
 
   const toggleCollapsed = () => {
     setCollapsed(prev => {
@@ -180,18 +205,88 @@ function Layout() {
         </div>
         <div id="who" className="who">{whoText}</div>
         <nav id="nav" aria-label="Main navigation">
-          {NAV.filter(n => (NAV_BY_ROLE[user?.role] || NAV.map(x => x[0])).includes(n[0]) && see(n[0])).map(([k, , to]) => (
-            <NavLink
-              key={k}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => (isActive ? 'active' : '')}
-              title={collapsed ? t(k) : undefined}
-            >
-              <Icon name={k} />
-              <span>{t(k)}</span>
-            </NavLink>
-          ))}
+          {NAV.filter(n => (NAV_BY_ROLE[user?.role] || NAV.map(x => x[0])).includes(n[0]) && see(n[0])).map(([k, , to]) => {
+            if (k === 'settings') {
+              return (
+                <div key={k} className={`side-nav-group ${settingsNavOpen ? 'expanded' : ''}`}>
+                  <div className={`side-nav-parent-row ${location.pathname.startsWith('/settings') ? 'active-parent' : ''}`}>
+                    <Link
+                      to={currentSettingsTab ? `/settings?tab=${currentSettingsTab}` : '/settings'}
+                      className={location.pathname.startsWith('/settings') && !settingsNavOpen ? 'active' : ''}
+                      title={collapsed ? t('settings') : undefined}
+                      onClick={() => {
+                        if (collapsed) toggleCollapsed();
+                        setSettingsNavOpen(true);
+                      }}
+                    >
+                      <Icon name="settings" />
+                      <span>{t('settings')}</span>
+                    </Link>
+                    {!collapsed && (
+                      <button
+                        type="button"
+                        className={`side-nav-chevron-btn ${settingsNavOpen ? 'expanded' : ''}`}
+                        aria-label={settingsNavOpen ? 'Collapse Settings components' : 'Expand Settings components'}
+                        aria-expanded={settingsNavOpen}
+                        title={settingsNavOpen ? 'Collapse Settings' : 'Expand Settings'}
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSettingsNavOpen(prev => !prev);
+                        }}
+                      >
+                        <svg
+                          className="chevron-icon"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points={settingsNavOpen ? "6 9 12 15 18 9" : "15 18 9 12 15 6"} />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+
+                  {!collapsed && settingsNavOpen && (
+                    <div className="side-submenu-list" role="region" aria-label="Settings components">
+                      {settingsSubItems.map(sub => {
+                        const isSubActive = location.pathname === '/settings' && currentSettingsTab === sub.id;
+                        return (
+                          <Link
+                            key={sub.id}
+                            to={`/settings?tab=${sub.id}`}
+                            className={`side-sublink ${isSubActive ? 'active' : ''}`}
+                            onClick={() => {
+                              if (window.innerWidth < 1024) setOpen(false);
+                            }}
+                          >
+                            <span className="side-sublink-bullet">•</span>
+                            <span>{t(sub.id) || sub.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <NavLink
+                key={k}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => (isActive ? 'active' : '')}
+                title={collapsed ? t(k) : undefined}
+              >
+                <Icon name={k} />
+                <span>{t(k)}</span>
+              </NavLink>
+            );
+          })}
         </nav>
       </aside>
 
@@ -220,7 +315,17 @@ function Layout() {
           >
             <Icon name="menu" className="menu-icon" />
           </button>
-          <strong id="pt">{user?.role === 'parent' && activeKey === 'dashboard' ? t('familyPortal') : (user?.role === 'student' && activeKey === 'dashboard' ? t('studentApp') : (user?.role === 'teacher' && activeKey === 'dashboard' ? t('teacherApp') : t(activeKey)))}</strong>
+          <strong id="pt">
+            {user?.role === 'parent' && activeKey === 'dashboard'
+              ? t('familyPortal')
+              : user?.role === 'student' && activeKey === 'dashboard'
+              ? t('studentApp')
+              : user?.role === 'teacher' && activeKey === 'dashboard'
+              ? t('teacherApp')
+              : activeKey === 'settings' && currentSettingsTab
+              ? `${t('settings')} · ${t(currentSettingsTab) || currentSettingsTab}`
+              : t(activeKey)}
+          </strong>
           {isReadOnly && <span className="bd y" id="vo">{t('viewOnly')}</span>}
           <span id="ay">{t('academicYear')} {settings.year}</span>
 
