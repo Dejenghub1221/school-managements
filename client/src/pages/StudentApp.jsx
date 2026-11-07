@@ -202,14 +202,6 @@ export default function StudentApp() {
           <span className="parent-portal-date">{todayStr}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <a
-            href="/profile"
-            className="btn sm"
-            style={{ textDecoration: 'none' }}
-            title="Change your personal account password"
-          >
-            🔑 Change Password
-          </a>
           <button
             type="button"
             className="btn sm"

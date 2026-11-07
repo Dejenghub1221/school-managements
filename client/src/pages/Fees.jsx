@@ -3,7 +3,7 @@ import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { Icon } from '../icons.jsx';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, ExportImportControls } from '../components/index.js';
 
 const PER = 8;
 const today = new Date().toISOString().slice(0, 10);
@@ -406,6 +406,31 @@ export default function Fees() {
           <option value="Partial">Partial</option>
           <option value="Unpaid">Unpaid</option>
         </select>
+        <ExportImportControls
+          entityKey="fees"
+          title="Student Fees"
+          columns={[
+            { key: 'id', label: 'Fee ID' },
+            { key: 'student', label: 'Student', format: r => studentName(r.student) },
+            { key: 'term', label: 'Term' },
+            { key: 'amount', label: 'Billed Amount', format: r => money(r.amount) },
+            { key: 'paid', label: 'Paid Amount', format: r => money(r.paid) },
+            { key: 'balance', label: 'Balance Due', format: r => money(r.amount - r.paid) },
+            { key: 'status', label: 'Status' },
+            { key: 'date', label: 'Date' }
+          ]}
+          data={filtered}
+          fields={[
+            { k: 'student', l: 'Student ID', req: 1 },
+            { k: 'amount', l: 'Billed Amount', t: 'number', req: 1 },
+            { k: 'paid', l: 'Paid Amount', t: 'number' },
+            { k: 'term', l: 'Term' },
+            { k: 'date', l: 'Date', t: 'date' }
+          ]}
+          canImport={write && isAdmin}
+          onImportComplete={load}
+          notify={(msg, type) => setToast(msg)}
+        />
       </div>
 
       {err ? (

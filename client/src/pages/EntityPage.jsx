@@ -3,7 +3,7 @@ import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { ENT } from '../config/entities.js';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile, Icon } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile, Icon, ExportImportControls } from '../components/index.js';
 
 const PER = 8;
 
@@ -399,6 +399,20 @@ export default function EntityPage({ k }) {
             {filterValues.map(x => <option key={x} value={x}>{x}</option>)}
           </select>
         )}
+        <ExportImportControls
+          entityKey={k}
+          title={cfg.label}
+          columns={cfg.cols.map(c => ({
+            key: c[0],
+            label: c[1],
+            format: c[2] ? r => String(c[2](r, rels) ?? '') : undefined
+          }))}
+          data={list}
+          fields={cfg.fields}
+          canImport={write}
+          onImportComplete={load}
+          notify={(msg, type) => setToast(msg)}
+        />
       </div>
 
       {err ? (

@@ -13,11 +13,20 @@ export async function api(path, { method = 'GET', body } = {}) {
     },
     body: body && JSON.stringify(body)
   });
-  const data = res.status === 204 ? {} : await res.json().catch(() => ({}));
+  if (res.status === 204) return {};
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    // If backend returned HTML (e.g. 404 Cannot DELETE ... or 500 HTML)
+    const cleanMsg = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    data = { error: cleanMsg || `Request failed (${res.status})` };
+  }
   if (res.status === 401 && path !== '/login' && path !== '/settings') {
     localStorage.clear();
     location.reload();
   }
-  if (!res.ok) throw new Error(data.error || 'Request failed.');
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
   return data;
 }

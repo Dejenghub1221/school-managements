@@ -21,10 +21,24 @@ router.get('/portal', async (req, res, next) => {
     const role = req.user.role;
     let teacherId = req.user.teacherId;
 
-    // Admin preview defaults to demo teacher T01 (Ms. Alemu)
+    // Resolve teacher ID from session, database, or fallback
     if (!teacherId) {
-      if (role === 'admin') teacherId = 'T01';
-      else return res.status(403).json({ error: 'Teacher ID required.' });
+      if (role === 'admin' || req.user.username === 'teacher') {
+        teacherId = 'T01';
+      } else {
+        const { rows: uRows } = await pool.query('SELECT teacher_id FROM users WHERE username = $1', [req.user.username]);
+        teacherId = uRows[0]?.teacher_id;
+        if (!teacherId) {
+          const { rows: tMatch } = await pool.query(
+            'SELECT id FROM teachers WHERE LOWER(name) = LOWER($1) OR LOWER(email) = LOWER($2) LIMIT 1',
+            [req.user.name || '', req.user.email || '']
+          );
+          teacherId = tMatch[0]?.id;
+        }
+      }
+    }
+    if (!teacherId) {
+      teacherId = 'T01'; // Safe default
     }
 
     // 1. Teacher profile

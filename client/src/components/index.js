@@ -4,4 +4,5 @@ export { Skeleton, Empty, Toast } from './Feedback.jsx';
 export { StudentProfile } from './StudentProfile.jsx';
 export { Notifications } from './Notifications.jsx';
 export { UserProfileMenu } from './UserProfileMenu.jsx';
+export { ExportImportControls } from './ExportImportControls.jsx';
 export { Icon, IconButton } from '../icons.jsx';
