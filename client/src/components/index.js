@@ -5,4 +5,7 @@ export { StudentProfile } from './StudentProfile.jsx';
 export { Notifications } from './Notifications.jsx';
 export { UserProfileMenu } from './UserProfileMenu.jsx';
 export { ExportImportControls } from './ExportImportControls.jsx';
+export { PaymentReceiptModal } from './PaymentReceiptModal.jsx';
+export { ConfirmPaymentModal } from './ConfirmPaymentModal.jsx';
+export { StudentRegistrationFeeModal } from './StudentRegistrationFeeModal.jsx';
 export { Icon, IconButton } from '../icons.jsx';

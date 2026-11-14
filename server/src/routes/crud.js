@@ -36,7 +36,7 @@ function clean(k, body = {}) {
   for (const f of NUMBERS) if (f in data) data[f] = Number(data[f]) || 0;
   const missing = REQUIRED[k].filter(f => data[f] === undefined || data[f] === '');
   if (missing.length) return { error: `Missing: ${missing.join(', ')}` };
-  if (k === 'students'    && !data.status) data.status = 'Active';
+  if (k === 'students'    && !data.status) data.status = 'Pending Payment';
   if (k === 'teachers'    && !data.status) data.status = 'Active';
   if (k === 'assignments' && !data.status) data.status = 'Open';
   if (k === 'exams'       && !data.status) data.status = 'Scheduled';
@@ -52,7 +52,7 @@ function clean(k, body = {}) {
 
 // ── column lists per table ────────────────────────────────────────────────────
 const COLS = {
-  students:    ['name','cls','gender','dob','phone','guardian','status','address'],
+  students:    ['name','cls','gender','dob','phone','guardian','status','address','registration_status','discount_applied','discount_reason','discount_by','enrolled_at'],
   teachers:    ['name','subject','classes','phone','email','status'],
   classes:     ['name','teacher','room'],
   subjects:    ['name','code'],
@@ -60,7 +60,7 @@ const COLS = {
   assignments: ['title','subject','cls','due','status','teacher_id'],
   parents:     ['name','phone','email'],
   library:     ['title','author','copies','issued'],
-  fees:        ['student','amount','paid','term','date','status'],
+  fees:        ['student','amount','paid','term','date','status','original_amount','discount','discount_reason','discount_approved_by'],
 };
 
 function buildInsert(table, id, data) {

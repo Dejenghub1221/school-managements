@@ -28,6 +28,7 @@ import { migrateProfileSchema } from './db/migrate_profile.js';
 import { migrateLmsSchema } from './db/migrate_lms.js';
 import { migrateUserSecuritySchema } from './db/migrate_user_security.js';
 import { migrateFeeApprovalSchema } from './db/migrate_fee_approval.js';
+import { migrateRegistrationPaymentSchema } from './db/migrate_registration_payment.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -71,8 +72,8 @@ app.get(['/api', '/api/health'], (req, res) => {
 });
 app.post('/api/login', login);
 app.post('/api/forgot-password', forgotPassword);
-setupCrud(app);
 app.use('/api/students', auth, studentsRouter);
+setupCrud(app);
 app.use('/api/payments', auth, paymentsRouter);
 app.use('/api', auth, statsRouter);
 app.use('/api/attendance', auth, attendanceRouter);
@@ -121,7 +122,10 @@ pool.query('SELECT 1')
     await migrateLmsSchema();
     await migrateUserSecuritySchema();
     await migrateFeeApprovalSchema();
-    app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
+    await migrateRegistrationPaymentSchema();
+    const server = app.listen(PORT, '0.0.0.0', () => console.log(`🚀  App on http://localhost:${PORT}`));
+    process.on('SIGTERM', () => server.close());
+    process.on('SIGINT', () => server.close());
   })
   .catch(err => {
     console.error('❌  Database connection failed:', err.message);
