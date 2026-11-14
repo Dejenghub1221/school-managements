@@ -3,7 +3,7 @@ import { api } from '../api/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSettings } from '../context/SettingsContext.jsx';
 import { ENT } from '../config/entities.js';
-import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile, Icon, ExportImportControls } from '../components/index.js';
+import { Badge, Empty, Modal, ConfirmModal, Skeleton, Toast, StudentProfile, Icon, ExportImportControls, StudentRegistrationFeeModal, ConfirmPaymentModal, PaymentReceiptModal } from '../components/index.js';
 
 const PER = 8;
 
@@ -130,6 +130,8 @@ export default function EntityPage({ k }) {
   const [modal, setModal] = useState(null);
   const [toast, setToast] = useState('');
   const [selectedProfile, setSelectedProfile] = useState(null);
+  const [payModalStudent, setPayModalStudent] = useState(null);
+  const [receiptToView, setReceiptToView] = useState(null);
 
   // Submissions state for assignments
   const [submissionsModal, setSubmissionsModal] = useState(null);
@@ -313,6 +315,7 @@ export default function EntityPage({ k }) {
           onDelete={student => setModal({ type: 'del', row: student })}
           onReportCard={student => openReportCard(student.id)}
           canWrite={write}
+          onRefresh={() => viewProfile(selectedProfile.student.id)}
         />
         {modal?.type === 'form' && (
           <Modal title="Edit student" onClose={() => setModal(null)}>
@@ -367,6 +370,12 @@ export default function EntityPage({ k }) {
             </div>
           </Modal>
         )}
+        {receiptToView && (
+          <PaymentReceiptModal
+            receipt={receiptToView}
+            onClose={() => setReceiptToView(null)}
+          />
+        )}
         <Toast msg={toast} onDone={() => setToast('')} />
       </>
     );
@@ -377,7 +386,10 @@ export default function EntityPage({ k }) {
       <div className="head">
         <h1>{cfg.label}</h1>
         {write ? (
-          <button className="btn pr" onClick={() => setModal({ type: 'form' })}>
+          <button
+            className="btn pr"
+            onClick={() => setModal({ type: k === 'students' ? 'studentRegFee' : 'form' })}
+          >
             Add {cfg.title.toLowerCase()}
           </button>
         ) : (
@@ -471,6 +483,28 @@ export default function EntityPage({ k }) {
                             onClick={() => openSubmissions(r)}
                           >
                             {isStudent ? '📋 My Submission' : '📥 Submissions'}
+                          </button>
+                        )}
+
+                        {/* Quick Pay Action for Students Pending Payment */}
+                        {k === 'students' && r.status === 'Pending Payment' && write && (
+                          <button
+                            type="button"
+                            className="btn sm"
+                            style={{
+                              background: '#f59e0b',
+                              borderColor: '#d97706',
+                              color: '#fff',
+                              fontSize: '0.78rem',
+                              padding: '3px 8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                            title="Collect / Verify Fee Payment to Activate Enrollment"
+                            onClick={() => setPayModalStudent(r)}
+                          >
+                            💳 Pay & Activate
                           </button>
                         )}
 
@@ -774,6 +808,51 @@ export default function EntityPage({ k }) {
           msg={`This will permanently delete <b>${modal.row.name || modal.row.title || modal.row.id}</b>. You can’t undo this.`}
           onCancel={() => setModal(null)}
           onConfirm={remove}
+        />
+      )}
+
+      {/* Student Registration with Mandatory Fee Payment Modal */}
+      {modal?.type === 'studentRegFee' && (
+        <StudentRegistrationFeeModal
+          rels={rels}
+          onSaveSuccess={res => {
+            setModal(null);
+            load();
+            setToast(
+              res.enrollmentStatus === 'Active'
+                ? `Student ${res.student?.name} enrolled & activated! 🎉`
+                : `Student ${res.student?.name} registered (Status: Pending Payment).`
+            );
+            if (res.receipt) {
+              setReceiptToView(res.receipt);
+            }
+          }}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      {/* Confirm Payment Modal for Students Pending Payment */}
+      {payModalStudent && (
+        <ConfirmPaymentModal
+          student={payModalStudent}
+          fee={{ amount: 500, paid: 0 }}
+          onPaymentSuccess={res => {
+            setPayModalStudent(null);
+            load();
+            setToast(res.message || 'Payment confirmed successfully!');
+            if (res.receipt) {
+              setReceiptToView(res.receipt);
+            }
+          }}
+          onClose={() => setPayModalStudent(null)}
+        />
+      )}
+
+      {/* Official Payment Receipt Modal */}
+      {receiptToView && (
+        <PaymentReceiptModal
+          receipt={receiptToView}
+          onClose={() => setReceiptToView(null)}
         />
       )}
 
